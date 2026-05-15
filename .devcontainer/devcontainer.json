@@ -1,0 +1,26 @@
+{
+    "name": "llm_sandbox",
+    "dockerComposeFile": [
+        "docker-compose.yaml"
+    ],
+    "service": "llm_sandbox",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-toolsai.datawrangler",
+                "yzhang.markdown-all-in-one"
+                
+            ]
+        }
+    },
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "remoteEnv": { "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}" },
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+            "moby": false
+        }
+    }
+}

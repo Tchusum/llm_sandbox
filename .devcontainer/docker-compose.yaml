@@ -1,0 +1,8 @@
+services:
+  llm_sandbox:
+    container_name: llm_sandbox
+    build: .
+    volumes:
+    # Mount the Docker socket to allow the container to communicate with the host's Docker daemon
+      - /var/run/docker.sock:/var/run/docker-host.sock
+      - ..:/workspaces/llm_sandbox:cached
