@@ -24,20 +24,20 @@ def extract_text_data() -> str:
         requests.HTTPError: If the HTTP request to download the file fails.
 
     """
-    if not Path("the-verdict.txt").exists():
+    if not Path("./data/the-verdict.txt").exists():
         url = (
             "https://raw.githubusercontent.com/rasbt/"
             "LLMs-from-scratch/main/ch02/01_main-chapter-code/"
             "the-verdict.txt"
         )
-        file_path = "the-verdict.txt"
+        file_path = "./data/the-verdict.txt"
 
         response = requests.get(url, timeout=30)
         response.raise_for_status()
 
         Path(file_path).write_bytes(response.content)
 
-    return Path("the-verdict.txt").read_text(encoding="utf-8")
+    return Path("./data/the-verdict.txt").read_text(encoding="utf-8")
 
 
 class GPTDataset(Dataset):
