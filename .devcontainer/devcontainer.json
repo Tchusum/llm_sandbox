@@ -11,8 +11,8 @@
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
                 "ms-toolsai.datawrangler",
-                "yzhang.markdown-all-in-one"
-                
+                "yzhang.markdown-all-in-one",
+                "openai.chatgpt"
             ]
         }
     },

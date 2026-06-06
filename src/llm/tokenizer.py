@@ -202,4 +202,4 @@ def build_embeddings(
 
 if __name__ == "__main__":
     path = "/workspaces/llm_sandbox/data/embeddings.pt"
-    build_embeddings(path)
+    embeddings = build_embeddings(path)
