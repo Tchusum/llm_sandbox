@@ -108,3 +108,4 @@ if __name__ == "__main__":
 
     print(f"Input shape:  {x.shape}")   # (2, 6, 8)
     print(f"Output shape: {out.shape}") # (2, 6, 16)
+    print("Done!")
