@@ -200,6 +200,17 @@ def build_embeddings(
     return all_embeddings
 
 
+def text_to_token_ids(text: str, tokenizer: object) -> torch.Tensor:
+    """Convert raw text to a tensor of token IDs using the provided tokenizer."""
+    encoded = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+    return torch.tensor(encoded).unsqueeze(0) # add batch dimension
+
+
+def token_ids_to_text(token_ids: torch.Tensor, tokenizer: object) -> str:
+    """Convert a tensor of token IDs back to text using the provided tokenizer."""
+    flat = token_ids.squeeze(0) # remove batch dimension
+    return tokenizer.decode(flat.tolist())
+
 if __name__ == "__main__":
     path = "/workspaces/llm_sandbox/data/embeddings.pt"
     embeddings = build_embeddings(path)
