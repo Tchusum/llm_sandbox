@@ -3,12 +3,11 @@
 import torch
 from torch import nn
 
-# TODO: Implement a pydantic model for configuration
 
 class MultiHeadAttention(nn.Module):
     """Multi-head self-attention module."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
             self,
             d_in: int,
             d_out: int,
@@ -18,14 +17,24 @@ class MultiHeadAttention(nn.Module):
             *,
             qkv_bias: bool = False,
         ) -> None:
-        """Initialize the multi-head attention module."""
+        """Initialize the multi-head attention module.
+
+        :param d_in: Input dimension (size of each input token embedding).
+        :param d_out: Output dimension (size of each output token embedding).
+        :param context_length: Maximum sequence length (context length).
+        :param dropout: Dropout probability for attention weights.
+        :param num_heads: Number of attention heads.
+        :param qkv_bias: Whether to include bias terms in the linear layers for queries, keys, and values.
+        """
         super().__init__()
+
+        # TODO: Remove this (validation can be done in the config)
         assert (d_out % num_heads == 0), \
             "d_out must be divisible by num_heads"  # noqa: S101
 
         self.d_out = d_out
         self.num_heads = num_heads
-        self.head_dim = d_out // num_heads # Reduce the projection dim to match desired output dim
+        self.head_dim = d_out // num_heads
 
         self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
@@ -44,14 +53,15 @@ class MultiHeadAttention(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Compute the multi-head attention output for the input `x`."""
-        b, num_tokens, _d_in = x.shape
-        # As in `CausalAttention`, for inputs where `num_tokens` exceeds `context_length`,
-        # this will result in errors in the mask creation further below.
-        # In practice, this is not a problem since the LLM (chapters 4-7) ensures that inputs
-        # do not exceed `context_length` before reaching this forward method.
+        """Compute the multi-head attention.
 
-        keys = self.W_key(x) # Shape: (b, num_tokens, d_out)
+        :param x: Input tensor of shape (batch_size, num_tokens, d_in).
+        :return: Output tensor of shape (batch_size, num_tokens, d_out).
+        """
+        b, num_tokens, _d_in = x.shape
+
+        # Shape: (b, num_tokens, d_out)  # noqa: ERA001
+        keys = self.W_key(x)
         queries = self.W_query(x)
         values = self.W_value(x)
 
@@ -82,6 +92,8 @@ class MultiHeadAttention(nn.Module):
         context_vec = (attn_weights @ values).transpose(1, 2)
 
         # Combine heads, where self.d_out = self.num_heads * self.head_dim
+        # contiguous() is used to ensure that the tensor is stored in a contiguous block of memory
+        # Caused by the transpose operation, which can lead to non-contiguous memory layout
         context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)
 
         return self.out_proj(context_vec) # optional projection
