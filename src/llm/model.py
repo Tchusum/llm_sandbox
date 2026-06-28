@@ -3,7 +3,7 @@
 Including the main components such as multi-head attention, feed-forward networks, and layer normalization.
 """
 import torch
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 from torch import nn
 
 from llm.attention import MultiHeadAttention, MultiHeadAttentionConfig
@@ -19,15 +19,6 @@ class GPTConfig(BaseModel):
     n_layers: int = 12
     drop_rate: float = 0.1
     qkv_bias: bool = False
-
-    @model_validator(mode="after")
-    def validate_heads(self) -> None:
-        """Validate that the embedding dimension is divisible by the number of heads."""
-        if self.emb_dim % self.n_heads != 0:
-            msg = "emb_dim must be divisible by n_heads"
-            raise ValueError(msg)
-        return self
-
 
 
 class GELU(nn.Module):

@@ -1,13 +1,11 @@
 """Implement the `MultiHeadAttention` class, which is a key component of transformer-based models."""
 
-from dataclasses import dataclass
-
 import torch
+from pydantic import BaseModel, model_validator
 from torch import nn
 
 
-@dataclass
-class MultiHeadAttentionConfig:
+class MultiHeadAttentionConfig(BaseModel):
     """Configuration for the MultiHeadAttention module."""
 
     d_in: int  # Input dimension (size of each input token embedding)
@@ -16,6 +14,14 @@ class MultiHeadAttentionConfig:
     dropout: float  # Dropout probability for attention weights
     num_heads: int  # Number of attention heads
     qkv_bias: bool = False  # Whether to include bias terms in the linear layers for queries, keys, and values
+
+    @model_validator(mode="after")
+    def validate_heads(self) -> None:
+        """Validate that the embedding dimension is divisible by the number of heads."""
+        if self.d_out % self.num_heads != 0:
+            msg = "d_out must be divisible by num_heads"
+            raise ValueError(msg)
+        return self
 
 
 class MultiHeadAttention(nn.Module):

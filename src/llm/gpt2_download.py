@@ -9,8 +9,13 @@ import tensorflow as tf
 from tqdm import tqdm
 
 
-def download_and_load_gpt2(model_size: str, models_dir: str) -> tuple[dict, dict]:
-    """Download and load GPT-2 model parameters from TensorFlow checkpoints."""
+def download_and_load_gpt2(model_size: str, models_dir: str) -> dict:
+    """Download and load GPT-2 model parameters from TensorFlow checkpoints.
+
+    :param model_size: The size of the GPT-2 model to download
+    :param models_dir: The directory where the model files will be stored.
+    :return: A dictionary containing the model parameters.
+    """
     # Validate model size
     allowed_sizes = ("124M", "355M", "774M", "1558M")
     if model_size not in allowed_sizes:
@@ -19,8 +24,8 @@ def download_and_load_gpt2(model_size: str, models_dir: str) -> tuple[dict, dict
 
     # Define paths
     model_dir = Path(models_dir) / model_size
+    # https://github.com/openai/gpt-2/blob/master/download_model.py
     base_url = "https://openaipublic.blob.core.windows.net/gpt-2/models"
-    backup_base_url = "https://f001.backblazeb2.com/file/LLMs-from-scratch/gpt2"
     filenames = [
         "checkpoint", "encoder.json", "hparams.json",
         "model.ckpt.data-00000-of-00001", "model.ckpt.index",
@@ -31,7 +36,6 @@ def download_and_load_gpt2(model_size: str, models_dir: str) -> tuple[dict, dict
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     for filename in filenames:
         file_url = f"{base_url}/{model_size}/{filename}"
-        backup_url = f"{backup_base_url}/{model_size}/{filename}"
         file_path = Path(model_dir) / filename
         download_file(file_url, file_path)
 
@@ -39,13 +43,16 @@ def download_and_load_gpt2(model_size: str, models_dir: str) -> tuple[dict, dict
     tf_ckpt_path = tf.train.latest_checkpoint(model_dir)
     with (Path(model_dir) / "hparams.json").open("r", encoding="utf-8") as f:
         settings = json.load(f)
-    params = load_gpt2_params_from_tf_ckpt(tf_ckpt_path, settings)
+    return load_gpt2_params_from_tf_ckpt(tf_ckpt_path, settings)
 
-    return settings, params
 
 
 def download_file(url: str, destination: Path) -> None:
-    """Download a file from a URL with progress tracking."""
+    """Download a file from a URL with progress tracking.
+
+    :param url: The URL of the file to download.
+    :param destination: The local path where the file will be saved.
+    """
     # Send a GET request to download the file in streaming mode
     response = requests.get(url, stream=True, timeout=30)
 
@@ -68,12 +75,17 @@ def download_file(url: str, destination: Path) -> None:
             destination.open("wb") as file:
         # Iterate over the file data in chunks
         for chunk in response.iter_content(block_size):
-            progress_bar.update(len(chunk))  # Update progress bar
-            file.write(chunk)  # Write the chunk to the file
+            progress_bar.update(len(chunk))
+            file.write(chunk)
 
 
 def load_gpt2_params_from_tf_ckpt(ckpt_path: str, settings: dict) -> dict:
-    ""
+    """Load GPT-2 model parameters from a TensorFlow checkpoint.
+
+    :param ckpt_path: The path to the TensorFlow checkpoint.
+    :param settings: The model settings dictionary.
+    :return: A dictionary containing the model parameters.
+    """
     # Initialize parameters dictionary with empty blocks for each layer
     params = {"blocks": [{} for _ in range(settings["n_layer"])]}
 
@@ -100,3 +112,10 @@ def load_gpt2_params_from_tf_ckpt(ckpt_path: str, settings: dict) -> dict:
         target_dict[last_key] = variable_array
 
     return params
+
+
+if __name__ == "__main__":
+    model_size = "124M"
+    models_dir = "data/gpt2"
+    params = download_and_load_gpt2(model_size, models_dir)
+    print(f"Loaded GPT-2 model parameters for size {model_size}.")

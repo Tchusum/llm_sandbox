@@ -1,15 +1,10 @@
-"""Load pretrained GPT-2 model, assign weights, and generate text.
-
-Provides functionality to load a pretrained GPT-2 model, assign weights from
-TensorFlow checkpoints, and generate text using the model. The main function
-demonstrates how to use these functionalities to generate text from a prompt.
-"""
+"""Load pretrained GPT-2 model, assign weights, and generate text."""
 import numpy as np
 import tiktoken
 import torch
 
-from llm.gpt_download import download_and_load_gpt2
-from llm.model import GPT_CONFIG_124M, GPTModel, generate
+from llm.gpt2_download import download_and_load_gpt2
+from llm.model import GPTConfig, GPTModel, generate
 from llm.tokenizer import text_to_token_ids, token_ids_to_text
 
 model_configs = {
@@ -20,15 +15,21 @@ model_configs = {
 }
 
 
-def load_gpt2_model() -> tuple[GPTModel, dict]:
-    """Load a GPT-2 model with pretrained weights from TensorFlow checkpoints."""
+def load_gpt2_model() -> tuple[GPTModel, GPTConfig]:
+    """Load a GPT-2 model with pretrained weights from TensorFlow checkpoints.
+
+    :return: A tuple containing the GPT model instance and its configuration.
+    """
     # Copy the base configuration and update with specific model settings
     model_name = "gpt2-small (124M)"  # Example model name
-    config = GPT_CONFIG_124M.copy()
-    config.update(model_configs[model_name])
-    config.update({"context_length": 1024, "qkv_bias": True})
+    config = GPTConfig(
+        emb_dim=model_configs[model_name]["emb_dim"],
+        n_layers=model_configs[model_name]["n_layers"],
+        n_heads=model_configs[model_name]["n_heads"],
+        qkv_bias=True,
+    )
 
-    _, params = download_and_load_gpt2(model_size="124M", models_dir="data/gpt2")
+    params = download_and_load_gpt2(model_size="124M", models_dir="data/gpt2")
 
     gpt = GPTModel(config)
     gpt.eval()
@@ -40,15 +41,28 @@ def load_gpt2_model() -> tuple[GPTModel, dict]:
 
 
 def assign(left: torch.nn.Parameter, right: np.ndarray) -> torch.nn.Parameter:
-    """Assign values from a NumPy array to a PyTorch parameter, ensuring shape compatibility."""
+    """Assign values from a NumPy array to a PyTorch parameter, ensuring shape compatibility.
+
+    :param left: The PyTorch parameter to which values will be assigned.
+    :param right: The NumPy array containing the values to assign.
+    :return: The updated PyTorch parameter with values from the NumPy array.
+    :raises ValueError: If the shapes of the left and right parameters do not match.
+    """
     if left.shape != right.shape:
         msg = f"Shape mismatch. Left: {left.shape}, Right: {right.shape}"
         raise ValueError(msg)
     return torch.nn.Parameter(torch.tensor(right))
 
 
-def load_weights_into_gpt(gpt: GPTModel, params: dict) -> None:
-    """Load pretrained weights from the params dictionary into the GPT model."""
+def load_weights_into_gpt(
+        gpt: GPTModel,
+        params: dict,
+) -> None:
+    """Load pretrained weights from the params dictionary into the GPT model.
+
+    :param gpt: The GPT model instance into which weights will be loaded.
+    :param params: A dictionary containing pretrained weights for the model.
+    """
     gpt.pos_emb.weight = assign(gpt.pos_emb.weight, params["wpe"])
     gpt.tok_emb.weight = assign(gpt.tok_emb.weight, params["wte"])
 
@@ -119,7 +133,7 @@ if __name__ == "__main__":
         model=gpt,
         idx=text_to_token_ids("Every effort moves you", tokenizer).to("cpu"),
         max_new_tokens=25,
-        context_size=config["context_length"],
+        context_size=config.context_length,
         top_k=50,
         temperature=1.5,
     )
