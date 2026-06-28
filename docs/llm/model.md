@@ -2,6 +2,28 @@
 
 `src/llm/model.py` implements a small GPT-like language model in PyTorch. It defines the model configuration, core transformer building blocks, the full GPT model, and a simple greedy text generation helper.
 
+GPT model
+│
+├─ Linear output layer
+├─ Final LayerNorm
+│
+├─ Transformer block × 12
+│  │
+│  ├─ LayerNorm 1
+│  ├─ Masked multi-head attention
+│  ├─ Dropout
+│  ├─ Residual connection
+│  │
+│  ├─ LayerNorm 2
+│  ├─ Feed forward
+│  ├─ Dropout
+│  └─ Residual connection
+│
+├─ Dropout
+├─ Positional embedding layer
+├─ Token embedding layer
+└─ Tokenized text
+
 ## Configuration
 
 `GPT_CONFIG_124M` stores the default architecture settings for a GPT-2-style 124M parameter model:
@@ -22,7 +44,7 @@
 
 ### `FeedForward`
 
-`FeedForward` is the per-token MLP inside each transformer block. It expands the embedding dimension by a factor of four, applies `GELU`, then projects back to the original embedding dimension.
+`FeedForward` is the per-token multilayer perceptron inside each transformer block. It expands the embedding dimension by a factor of four, applies `GELU`, then projects back to the original embedding dimension.
 
 Input and output shape:
 

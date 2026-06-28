@@ -1,7 +1,21 @@
 """Implement the `MultiHeadAttention` class, which is a key component of transformer-based models."""
 
+from dataclasses import dataclass
+
 import torch
 from torch import nn
+
+
+@dataclass
+class MultiHeadAttentionConfig:
+    """Configuration for the MultiHeadAttention module."""
+
+    d_in: int  # Input dimension (size of each input token embedding)
+    d_out: int  # Output dimension (size of each output token embedding)
+    context_length: int  # Maximum sequence length (context length)
+    dropout: float  # Dropout probability for attention weights
+    num_heads: int  # Number of attention heads
+    qkv_bias: bool = False  # Whether to include bias terms in the linear layers for queries, keys, and values
 
 
 class MultiHeadAttention(nn.Module):
@@ -9,44 +23,29 @@ class MultiHeadAttention(nn.Module):
 
     def __init__(
             self,
-            d_in: int,
-            d_out: int,
-            context_length: int,
-            dropout: float,
-            num_heads: int,
-            *,
-            qkv_bias: bool = False,
+            cfg: MultiHeadAttentionConfig,
         ) -> None:
         """Initialize the multi-head attention module.
 
-        :param d_in: Input dimension (size of each input token embedding).
-        :param d_out: Output dimension (size of each output token embedding).
-        :param context_length: Maximum sequence length (context length).
-        :param dropout: Dropout probability for attention weights.
-        :param num_heads: Number of attention heads.
-        :param qkv_bias: Whether to include bias terms in the linear layers for queries, keys, and values.
+        :param cfg: Configuration object containing model parameters
         """
         super().__init__()
 
-        # TODO: Remove this (validation can be done in the config)
-        assert (d_out % num_heads == 0), \
-            "d_out must be divisible by num_heads"  # noqa: S101
+        self.d_out = cfg.d_out
+        self.num_heads = cfg.num_heads
+        self.head_dim = cfg.d_out // cfg.num_heads
 
-        self.d_out = d_out
-        self.num_heads = num_heads
-        self.head_dim = d_out // num_heads
-
-        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
-        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
-        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
-        self.out_proj = nn.Linear(d_out, d_out)  # Linear layer to combine head outputs
-        self.dropout = nn.Dropout(dropout)
+        self.W_query = nn.Linear(cfg.d_in, cfg.d_out, bias=cfg.qkv_bias)
+        self.W_key = nn.Linear(cfg.d_in, cfg.d_out, bias=cfg.qkv_bias)
+        self.W_value = nn.Linear(cfg.d_in, cfg.d_out, bias=cfg.qkv_bias)
+        self.out_proj = nn.Linear(cfg.d_out, cfg.d_out)  # Linear layer to combine head outputs
+        self.dropout = nn.Dropout(cfg.dropout)
         self.register_buffer(
             "mask",
             torch.triu(
                 torch.ones(
-                    context_length,
-                    context_length,
+                    cfg.context_length,
+                    cfg.context_length,
                 ),
                 diagonal=1,
             ),
@@ -107,13 +106,15 @@ if __name__ == "__main__":
     d_in, d_out = 8, 16
     num_heads = 4
 
-    mha = MultiHeadAttention(
+    cfg = MultiHeadAttentionConfig(
         d_in=d_in,
         d_out=d_out,
         context_length=context_length,
         dropout=0.0,
         num_heads=num_heads,
     )
+
+    mha = MultiHeadAttention(cfg)
 
     x = torch.randn(batch_size, context_length, d_in)
     out = mha(x)

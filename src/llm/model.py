@@ -3,19 +3,32 @@
 Including the main components such as multi-head attention, feed-forward networks, and layer normalization.
 """
 import torch
+from pydantic import BaseModel, model_validator
 from torch import nn
 
-from llm.attention import MultiHeadAttention
+from llm.attention import MultiHeadAttention, MultiHeadAttentionConfig
 
-GPT_CONFIG_124M = {
-    "vocab_size": 50257,    # Vocabulary size
-    "context_length": 1024, # Context length
-    "emb_dim": 768,         # Embedding dimension
-    "n_heads": 12,          # Number of attention heads
-    "n_layers": 12,         # Number of layers
-    "drop_rate": 0.1,       # Dropout rate
-    "qkv_bias": False,       # Query-Key-Value bias
-}
+
+class GPTConfig(BaseModel):
+    """Configuration for the GPT-like language model."""
+
+    vocab_size: int = 50257
+    context_length: int = 1024
+    emb_dim: int = 768
+    n_heads: int = 12
+    n_layers: int = 12
+    drop_rate: float = 0.1
+    qkv_bias: bool = False
+
+    @model_validator(mode="after")
+    def validate_heads(self) -> None:
+        """Validate that the embedding dimension is divisible by the number of heads."""
+        if self.emb_dim % self.n_heads != 0:
+            msg = "emb_dim must be divisible by n_heads"
+            raise ValueError(msg)
+        return self
+
+
 
 class GELU(nn.Module):
     """Gaussian Error Linear Unit activation function."""
@@ -25,7 +38,10 @@ class GELU(nn.Module):
         super().__init__()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply the GELU activation function to the input tensor."""
+        """Apply the GELU activation function to the input tensor.
+
+        :param x: Input tensor
+        """
         return 0.5 * x * (1 + torch.tanh(
             torch.sqrt(torch.tensor(2.0 / torch.pi)) *
             (x + 0.044715 * torch.pow(x, 3)),
@@ -35,17 +51,23 @@ class GELU(nn.Module):
 class FeedForward(nn.Module):
     """Feed-forward network consisting of two linear layers with GELU activation."""
 
-    def __init__(self, cfg: dict) -> None:
-        """Initialize the feed-forward network."""
+    def __init__(self, cfg: GPTConfig) -> None:
+        """Initialize the feed-forward network.
+
+        :param cfg: Configuration object containing model parameters
+        """
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(cfg["emb_dim"], 4 * cfg["emb_dim"]),
+            nn.Linear(cfg.emb_dim, 4 * cfg.emb_dim),
             GELU(),
-            nn.Linear(4 * cfg["emb_dim"], cfg["emb_dim"]),
+            nn.Linear(4 * cfg.emb_dim, cfg.emb_dim),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through the feed-forward network."""
+        """Forward pass through the feed-forward network.
+
+        :param x: Input tensor
+        """
         return self.layers(x)
 
 
@@ -60,7 +82,11 @@ class LayerNorm(nn.Module):
         self.shift = nn.Parameter(torch.zeros(emb_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply layer normalization to the input tensor."""
+        """Apply layer normalization to the input tensor.
+
+        :param x: Input tensor
+        :return: Layer-normalized tensor
+        """
         mean = x.mean(dim=-1, keepdim=True)
         var = x.var(dim=-1, keepdim=True, unbiased=False)
         norm_x = (x - mean) / torch.sqrt(var + self.eps)
@@ -70,32 +96,38 @@ class LayerNorm(nn.Module):
 class TransformerBlock(nn.Module):
     """A single transformer block consisting of multi-head attention and feed-forward network."""
 
-    def __init__(self, cfg: dict) -> None:
-        """Initialize the transformer block."""
+    def __init__(self, cfg: GPTConfig) -> None:
+        """Initialize the transformer block.
+
+        :param cfg: Configuration object containing model parameters
+        """
         super().__init__()
-        self.att = MultiHeadAttention(
-            d_in=cfg["emb_dim"],
-            d_out=cfg["emb_dim"],
-            context_length=cfg["context_length"],
-            num_heads=cfg["n_heads"],
-            dropout=cfg["drop_rate"],
-            qkv_bias=cfg["qkv_bias"],
+        mha_cfg = MultiHeadAttentionConfig(
+            d_in=cfg.emb_dim,
+            d_out=cfg.emb_dim,
+            context_length=cfg.context_length,
+            num_heads=cfg.n_heads,
+            dropout=cfg.drop_rate,
+            qkv_bias=cfg.qkv_bias,
         )
+        self.att = MultiHeadAttention(mha_cfg)
         self.ff = FeedForward(cfg)
-        self.norm1 = LayerNorm(cfg["emb_dim"])
-        self.norm2 = LayerNorm(cfg["emb_dim"])
-        self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
+        self.norm1 = LayerNorm(cfg.emb_dim)
+        self.norm2 = LayerNorm(cfg.emb_dim)
+        self.drop_shortcut = nn.Dropout(cfg.drop_rate)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through the transformer block."""
-        # Shortcut connection for attention block
+        """Forward pass through the transformer block.
+
+        :param x: Input tensor
+        :return: Output tensor
+        """
         shortcut = x
         x = self.norm1(x)
         x = self.att(x)  # Shape [batch_size, num_tokens, emb_size]
         x = self.drop_shortcut(x)
         x = x + shortcut  # Add the original input back
 
-        # Shortcut connection for feed forward block
         shortcut = x
         x = self.norm2(x)
         x = self.ff(x)
@@ -110,20 +142,23 @@ class GPTModel(nn.Module):
     and a final linear layer to produce logits for the vocabulary.
     """
 
-    def __init__(self, cfg: dict) -> None:
-        """Initialize the GPT-like language model."""
+    def __init__(self, cfg: GPTConfig) -> None:
+        """Initialize the GPT-like language model.
+
+        :param cfg: Configuration object containing model parameters
+        """
         super().__init__()
-        self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
-        self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
-        self.drop_emb = nn.Dropout(cfg["drop_rate"])
+        self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.emb_dim)
+        self.pos_emb = nn.Embedding(cfg.context_length, cfg.emb_dim)
+        self.drop_emb = nn.Dropout(cfg.drop_rate)
 
         self.trf_blocks = nn.Sequential(
-            *[TransformerBlock(cfg) for _ in range(cfg["n_layers"])])
+            *[TransformerBlock(cfg) for _ in range(cfg.n_layers)])
 
-        self.final_norm = LayerNorm(cfg["emb_dim"])
+        self.final_norm = LayerNorm(cfg.emb_dim)
         self.out_head = nn.Linear(
-            cfg["emb_dim"],
-            cfg["vocab_size"],
+            cfg.emb_dim,
+            cfg.vocab_size,
             bias=False,
         )
 
@@ -139,7 +174,7 @@ class GPTModel(nn.Module):
         return self.out_head(x)
 
 
-def generate(  # noqa: PLR0913
+def generate(
     model: GPTModel,
     idx: torch.Tensor,
     max_new_tokens: int,
@@ -148,26 +183,36 @@ def generate(  # noqa: PLR0913
     top_k: int | None = None,
     eos_id: int | None = None,
 ) -> torch.Tensor:
-    """Generate text from the model given an initial context."""
-    # For-loop is the same as before: Get logits, and only focus on last time step
+    """Generate text from the model given an initial context.
+
+    :param model: The GPT-like language model
+    :param idx: Input tensor containing token indices
+    :param max_new_tokens: Maximum number of new tokens to generate
+    :param context_size: Size of the context window to consider for generation
+    :param temperature: Temperature for sampling (default: 0.0)
+    :param top_k: If specified, only consider the top_k logits for sampling (default: None)
+    :param eos_id: If specified, stop generation when this token ID is generated
+    :return: Tensor containing the generated token indices
+    """
+    # Get logits, and only focus on last time step
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]
         with torch.no_grad():
             logits = model(idx_cond)
         logits = logits[:, -1, :]
 
-        # New: Filter logits with top_k sampling
+        # Filter logits with top_k sampling
         if top_k is not None:
             # Keep only top_k values
             top_logits, _ = torch.topk(logits, top_k)
             min_val = top_logits[:, -1]
             logits = torch.where(logits < min_val, torch.tensor(float("-inf")).to(logits.device), logits)
 
-        # New: Apply temperature scaling
+        # Apply temperature scaling
         if temperature > 0.0:
             logits = logits / temperature
 
-            # New (not in book): numerical stability tip to get equivalent results on mps device
+            # Numerical stability tip to get equivalent results on mps device
             # subtract rowwise max before softmax
             logits = logits - logits.max(dim=-1, keepdim=True).values
 
@@ -177,14 +222,14 @@ def generate(  # noqa: PLR0913
             # Sample from the distribution
             idx_next = torch.multinomial(probs, num_samples=1)  # (batch_size, 1)
 
-        # Otherwise same as before: get idx of the vocab entry with the highest logits value
+        # get idx of the vocab entry with the highest logits value
         else:
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch_size, 1)
 
         if idx_next == eos_id:  # Stop generating early if end-of-sequence token is encountered and eos_id is specified
             break
 
-        # Same as before: append sampled index to the running sequence
+        # append sampled index to the running sequence
         idx = torch.cat((idx, idx_next), dim=1)  # (batch_size, num_tokens+1)
 
     return idx
@@ -208,7 +253,7 @@ if __name__ == "__main__":
 
     # Implement the model
     torch.manual_seed(123)
-    model = GPTModel(GPT_CONFIG_124M)
+    model = GPTModel(GPTConfig())
 
     out = model(batch)
     print("Input batch:\n", batch)
@@ -230,7 +275,7 @@ if __name__ == "__main__":
         model=model,
         idx=encoded_tensor,
         max_new_tokens=6,
-        context_size=GPT_CONFIG_124M["context_length"]
+        context_size=GPTConfig().context_length,
     )
 
     print("Output:", out)
