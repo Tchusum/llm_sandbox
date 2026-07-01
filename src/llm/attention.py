@@ -1,5 +1,4 @@
 """Implement the `MultiHeadAttention` class, which is a key component of transformer-based models."""
-
 import torch
 from pydantic import BaseModel, model_validator
 from torch import nn

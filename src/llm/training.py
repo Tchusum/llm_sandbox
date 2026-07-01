@@ -3,39 +3,35 @@ import numpy as np
 import tiktoken
 import torch
 
+from llm.config import MODEL_CONFIG
 from llm.gpt2_download import download_and_load_gpt2
 from llm.model import GPTConfig, GPTModel, generate
 from llm.tokenizer import text_to_token_ids, token_ids_to_text
 
-model_configs = {
-    "gpt2-small (124M)": {"emb_dim": 768, "n_layers": 12, "n_heads": 12},
-    "gpt2-medium (355M)": {"emb_dim": 1024, "n_layers": 24, "n_heads": 16},
-    "gpt2-large (774M)": {"emb_dim": 1280, "n_layers": 36, "n_heads": 20},
-    "gpt2-xl (1558M)": {"emb_dim": 1600, "n_layers": 48, "n_heads": 25},
-}
 
-
-def load_gpt2_model() -> tuple[GPTModel, GPTConfig]:
+def load_gpt2_model(model_name: str) -> tuple[GPTModel, GPTConfig]:
     """Load a GPT-2 model with pretrained weights from TensorFlow checkpoints.
 
+    :param model_name: The name of the GPT-2 model to load (e.g., "gpt2-small (124M)").
     :return: A tuple containing the GPT model instance and its configuration.
     """
     # Copy the base configuration and update with specific model settings
-    model_name = "gpt2-small (124M)"  # Example model name
     config = GPTConfig(
-        emb_dim=model_configs[model_name]["emb_dim"],
-        n_layers=model_configs[model_name]["n_layers"],
-        n_heads=model_configs[model_name]["n_heads"],
+        emb_dim=MODEL_CONFIG[model_name]["emb_dim"],
+        n_layers=MODEL_CONFIG[model_name]["n_layers"],
+        n_heads=MODEL_CONFIG[model_name]["n_heads"],
         qkv_bias=True,
     )
 
-    params = download_and_load_gpt2(model_size="124M", models_dir="data/gpt2")
+    params = download_and_load_gpt2(model_size=MODEL_CONFIG[model_name]["size"], models_dir="data/gpt2")
 
     gpt = GPTModel(config)
     gpt.eval()
 
     load_weights_into_gpt(gpt, params)
-    gpt.to("cpu")
+
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    gpt.to(device)
 
     return gpt, config
 
@@ -125,7 +121,7 @@ def load_weights_into_gpt(
 if __name__ == "__main__":
     torch.manual_seed(123)
 
-    gpt, config = load_gpt2_model()
+    gpt, config = load_gpt2_model("gpt2-small")
 
     tokenizer = tiktoken.get_encoding("gpt2")
 
@@ -139,3 +135,159 @@ if __name__ == "__main__":
     )
 
     print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
+
+
+def calc_loss_batch(
+    input_batch: torch.Tensor,
+    target_batch: torch.Tensor,
+    model: torch.nn.Module,
+    device: torch.device,
+) -> torch.Tensor:
+    """Calculate the loss for a batch of input and target data.
+
+    :param input_batch: A batch of input data (token IDs).
+    :param target_batch: A batch of target data (token IDs).
+    :param model: The GPT model used for generating predictions.
+    :param device: The device (CPU or GPU) to run the calculations on.
+    :return: The calculated loss for the batch.
+    """
+    input_batch, target_batch = input_batch.to(device), target_batch.to(device)
+    logits = model(input_batch)
+    return torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())
+
+
+def calc_loss_loader(
+    data_loader: torch.utils.data.DataLoader,
+    model: torch.nn.Module,
+    device: torch.device,
+    num_batches: int | None = None,
+) -> float:
+    """Calculate the average loss over a specified number of batches from a data loader.
+
+    :param data_loader: A DataLoader providing batches of input and target data.
+    :param model: The GPT model used for generating predictions.
+    :param device: The device (CPU or GPU) to run the calculations on.
+    :param num_batches: The number of batches to use for loss calculation.
+    :return: The average loss over the specified number of batches.
+    """
+    total_loss = 0.
+    if len(data_loader) == 0:
+        return float("nan")
+    num_batches = len(data_loader) if num_batches is None else min(num_batches, len(data_loader))
+    for i, (input_batch, target_batch) in enumerate(data_loader):
+        if i < num_batches:
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            total_loss += loss.item()
+        else:
+            break
+    return total_loss / num_batches
+
+
+def evaluate_model(
+    model: GPTModel,
+    train_loader: torch.utils.data.DataLoader,
+    val_loader: torch.utils.data.DataLoader,
+    device: torch.device,
+    eval_iter: int,
+) -> tuple[float, float]:
+    """Evaluate the model on training and validation data.
+
+    :param model: The GPT model to evaluate.
+    :param train_loader: DataLoader for the training dataset.
+    :param val_loader: DataLoader for the validation dataset.
+    :param device: The device (CPU or GPU) to run the evaluation on.
+    :param eval_iter: Number of iterations to use for evaluation.
+    :return: A tuple containing the average training loss and validation loss.
+    """
+    model.eval()
+    with torch.no_grad():
+        train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
+        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
+    model.train()
+    return train_loss, val_loss
+
+
+def generate_and_print_sample(
+    model: GPTModel,
+    tokenizer: tiktoken.Encoding,
+    device: torch.device,
+    start_context: str,
+) -> None:
+    """Generate a sample text from the model and print it.
+
+    :param model: The GPT model used for generating text.
+    :param tokenizer: The tokenizer used for encoding and decoding text.
+    :param device: The device (CPU or GPU) to run the generation on.
+    :param start_context: The initial context string for generating sample text.
+    """
+    model.eval()
+    context_size = model.pos_emb.weight.shape[0]
+    encoded = text_to_token_ids(start_context, tokenizer).to(device)
+    with torch.no_grad():
+        token_ids = generate(
+            model=model, idx=encoded,
+            max_new_tokens=50, context_size=context_size,
+        )
+    decoded_text = token_ids_to_text(token_ids, tokenizer)
+    print(decoded_text.replace("\n", " "))  # Compact print format
+    model.train()
+
+
+def train_model_simple(  # noqa: PLR0913
+    model: GPTModel,
+    train_loader: torch.utils.data.DataLoader,
+    val_loader: torch.utils.data.DataLoader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    num_epochs: int,
+    eval_freq: int,
+    eval_iter: int,
+    start_context: str,
+    tokenizer: tiktoken.Encoding,
+) -> tuple[list[float], list[float], list[int]]:
+    """Train the model using a simple training loop.
+
+    :param model: The GPT model to be trained.
+    :param train_loader: DataLoader for the training dataset.
+    :param val_loader: DataLoader for the validation dataset.
+    :param optimizer: Optimizer for updating model weights.
+    :param device: The device (CPU or GPU) to run the training on.
+    :param num_epochs: Number of epochs to train the model.
+    :param eval_freq: Frequency (in steps) to evaluate the model on validation data.
+    :param eval_iter: Number of iterations to use for evaluation.
+    :param start_context: The initial context string for generating sample text.
+    :param tokenizer: The tokenizer used for encoding and decoding text.
+    :return: A tuple containing lists of training losses, validation losses, and tokens seen.
+    """
+    # Initialize lists to track losses and tokens seen
+    train_losses, val_losses, track_tokens_seen = [], [], []
+    tokens_seen, global_step = 0, -1
+
+    # Main training loop
+    for epoch in range(num_epochs):
+        model.train()  # Set model to training mode
+
+        for input_batch, target_batch in train_loader:
+            optimizer.zero_grad() # Reset loss gradients from previous batch iteration
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            loss.backward() # Calculate loss gradients
+            optimizer.step() # Update model weights using loss gradients
+            tokens_seen += input_batch.numel()
+            global_step += 1
+
+            # Optional evaluation step
+            if global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model(
+                    model, train_loader, val_loader, device, eval_iter)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                track_tokens_seen.append(tokens_seen)
+                print(f"Ep {epoch+1} (Step {global_step:06d}): "
+                      f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
+
+        # Print a sample text after each epoch
+        generate_and_print_sample(
+            model, tokenizer, device, start_context,
+        )
+
+    return train_losses, val_losses, track_tokens_seen

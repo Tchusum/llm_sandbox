@@ -1,5 +1,4 @@
 """Module for downloading and loading GPT-2 models."""
-
 import json
 from pathlib import Path
 

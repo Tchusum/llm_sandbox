@@ -2,11 +2,14 @@
 
 Including the main components such as multi-head attention, feed-forward networks, and layer normalization.
 """
+from pathlib import Path
+
 import torch
 from pydantic import BaseModel
 from torch import nn
 
 from llm.attention import MultiHeadAttention, MultiHeadAttentionConfig
+from llm.config import MODEL_CONFIG
 
 
 class GPTConfig(BaseModel):
@@ -18,7 +21,7 @@ class GPTConfig(BaseModel):
     n_heads: int = 12
     n_layers: int = 12
     drop_rate: float = 0.1
-    qkv_bias: bool = False
+    qkv_bias: bool = True
 
 
 class GELU(nn.Module):
@@ -165,7 +168,37 @@ class GPTModel(nn.Module):
         return self.out_head(x)
 
 
-def generate(
+def load_model(model_name: str, device: torch.device) -> tuple[GPTModel, GPTConfig]:
+    """Load a GPT model from a specified path and prepares it for evaluation.
+
+    :param model_name: The name of the model to load (e.g., "gpt2").
+    :param device: The device to load the model onto (e.g., "cpu" or "cuda").
+    :return: The loaded GPTModel instance and its configuration.
+
+    """
+    model_path = Path(__file__).parent.parent.parent / "data" / f"{model_name}-sft.pth"
+    if not model_path.exists():
+        msg = f"Model file not found at {model_path}."
+        raise FileNotFoundError(msg)
+
+    # Instantiate model
+    config = GPTConfig(
+        emb_dim=MODEL_CONFIG[model_name]["emb_dim"],
+        n_layers=MODEL_CONFIG[model_name]["n_layers"],
+        n_heads=MODEL_CONFIG[model_name]["n_heads"],
+    )
+    model = GPTModel(config)
+
+    # Then load model weights
+    checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+    model.load_state_dict(checkpoint)
+    model.to(device)
+    model.eval()
+
+    return model, config
+
+
+def generate(  # noqa: PLR0913
     model: GPTModel,
     idx: torch.Tensor,
     max_new_tokens: int,
