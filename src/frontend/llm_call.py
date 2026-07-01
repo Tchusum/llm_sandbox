@@ -10,10 +10,10 @@ model, config = load_model("gpt2-xl", device=device)
 
 prompt = """
 ### Instruction:
-Whish me a good day.
+Translate the following English text to French.
 
 ### Input:
-The horse is fast.
+What is your name?
 """
 tokenizer = tiktoken.get_encoding("gpt2")
 prompt_token = text_to_token_ids(prompt, tokenizer).to(device)
