@@ -244,6 +244,7 @@ def train_model_simple(  # noqa: PLR0913
     eval_iter: int,
     start_context: str,
     tokenizer: tiktoken.Encoding,
+    accumulation_steps: int = 1,
 ) -> tuple[list[float], list[float], list[int]]:
     """Train the model using a simple training loop.
 
@@ -257,6 +258,8 @@ def train_model_simple(  # noqa: PLR0913
     :param eval_iter: Number of iterations to use for evaluation.
     :param start_context: The initial context string for generating sample text.
     :param tokenizer: The tokenizer used for encoding and decoding text.
+    :param accumulation_steps: Number of batches to accumulate gradients over.
+        It use less memory and can be used to simulate larger batch sizes.
     :return: A tuple containing lists of training losses, validation losses, and tokens seen.
     """
     # Initialize lists to track losses and tokens seen
@@ -267,13 +270,18 @@ def train_model_simple(  # noqa: PLR0913
     for epoch in range(num_epochs):
         model.train()  # Set model to training mode
 
-        for input_batch, target_batch in train_loader:
-            optimizer.zero_grad() # Reset loss gradients from previous batch iteration
+        for batch_idx, (input_batch, target_batch) in enumerate(train_loader):
+            # Forward pass with gradient accumulation
             loss = calc_loss_batch(input_batch, target_batch, model, device)
-            loss.backward() # Calculate loss gradients
-            optimizer.step() # Update model weights using loss gradients
+            loss = loss / accumulation_steps  # Scale loss for gradient averaging
+            loss.backward()  # Accumulate gradients
             tokens_seen += input_batch.numel()
             global_step += 1
+
+            # Update weights every accumulation_steps batches
+            if (batch_idx + 1) % accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
 
             # Optional evaluation step
             if global_step % eval_freq == 0:
