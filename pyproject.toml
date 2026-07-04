@@ -13,6 +13,7 @@ dependencies = [
     "tqdm>=4.68.2",
     "psutil>=7.2.2",
     "flatbuffers>=25.12.19",
+    "streamlit>=1.58.0",
 ]
 
 [tool.hatch.build.targets.wheel]

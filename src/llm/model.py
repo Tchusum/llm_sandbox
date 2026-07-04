@@ -220,6 +220,8 @@ def generate(  # noqa: PLR0913
     temperature: float = 0.0,
     top_k: int | None = None,
     eos_id: int | None = None,
+    *,
+    exclude_input: bool = False,
 ) -> torch.Tensor:
     """Generate text from the model given an initial context.
 
@@ -232,6 +234,9 @@ def generate(  # noqa: PLR0913
     :param eos_id: If specified, stop generation when this token ID is generated
     :return: Tensor containing the generated token indices
     """
+    # remember original input length (to optionally exclude it from output)
+    orig_len = idx.shape[1]
+
     # Get logits, and only focus on last time step
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]
@@ -264,12 +269,16 @@ def generate(  # noqa: PLR0913
         else:
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch_size, 1)
 
-        if idx_next == eos_id:  # Stop generating early if end-of-sequence token is encountered and eos_id is specified
-            break
+        if eos_id is not None:  # noqa: SIM102
+            # Stop generating early if end-of-sequence token is encountered for all batch items
+            if (idx_next == eos_id).all():
+                break
 
         # append sampled index to the running sequence
         idx = torch.cat((idx, idx_next), dim=1)  # (batch_size, num_tokens+1)
 
+    if exclude_input:
+        return idx[:, orig_len:]
     return idx
 
 
@@ -314,6 +323,7 @@ if __name__ == "__main__":
         idx=encoded_tensor,
         max_new_tokens=6,
         context_size=GPTConfig().context_length,
+        exclude_input=True,
     )
 
     print("Output:", out)
