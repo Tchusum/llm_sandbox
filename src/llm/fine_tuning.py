@@ -259,6 +259,7 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     num_epochs: int = 2,
     allowed_max_length: int = 1024,
     accumulation_steps: int = 1,
+    max_samples: int | None = None,
     *,
     evaluate_with_ollama: bool = True,
 ) -> None:
@@ -272,10 +273,11 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     :param allowed_max_length: Maximum token length passed to the collate function.
         :param accumulation_steps: Number of batches to accumulate gradients over. Use 4 with batch_size=2
                                 to simulate batch_size=8 with less memory.
+    :param max_samples: Optional maximum number of samples to use from the dataset.
     :param evaluate_with_ollama: Whether to score test responses through the local Ollama API.
     """
     # Download data
-    train_data, val_data, test_data = query_instruction_data(dataset_name)
+    train_data, val_data, test_data = query_instruction_data(dataset_name, max_samples=max_samples)
 
     # Set up data loaders
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -379,7 +381,6 @@ if __name__ == "__main__":
         model_name,
         dataset_name="alpaca",
         batch_size=1,
-        accumulation_steps=8,
-        allowed_max_length=512,
+        max_samples=500,
     )
 

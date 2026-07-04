@@ -90,6 +90,7 @@ def query_instruction_data(
     dataset_name: str = "rasbt",
     train_ratio: float = 0.85,
     test_ratio: float = 0.1,
+    max_samples: int | None = None
 ) -> tuple[list, list, list]:
     """Load a supported instruction dataset and split it for fine-tuning."""
     try:
@@ -100,5 +101,7 @@ def query_instruction_data(
         raise ValueError(msg) from exc
 
     data = download_json(dataset_config["file_path"], dataset_config["url"])
+    if max_samples is not None:
+        data = data[:max_samples]
     return split_instruction_data(data, train_ratio=train_ratio, test_ratio=test_ratio)
 

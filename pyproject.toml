@@ -2,7 +2,7 @@
 name = "build_llm_from_scratch"
 version = "0.1.0"
 description = "build_llm_from_scratch"
-requires-python = "~=3.13.0"
+requires-python = "~=3.12.0"
 dependencies = [
     "ruff>=0.15.12",
     "torch>=2.12.0",

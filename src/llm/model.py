@@ -169,29 +169,43 @@ class GPTModel(nn.Module):
 
 
 def load_model(model_name: str, device: torch.device) -> tuple[GPTModel, GPTConfig]:
-    """Load a GPT model from a specified path and prepares it for evaluation.
+    """Load a GPT model and its weights using only `model_name`.
 
-    :param model_name: The name of the model to load (e.g., "gpt2").
-    :param device: The device to load the model onto (e.g., "cpu" or "cuda").
+    `model_name` may be a base model (e.g. "gpt2-xl") or a checkpoint-like
+    identifier (e.g. "gpt2-xl-alpaca-sft" or "my_checkpoint.pth"). The function
+    resolves the checkpoint filename and the base model key from `MODEL_CONFIG`.
+
+    :param model_name: Base model name or checkpoint-like name.
+    :param device: The device to load the model onto.
     :return: The loaded GPTModel instance and its configuration.
-
     """
-    model_path = Path(__file__).parent.parent.parent / "data" / f"{model_name}-sft.pth"
+    # Resolve checkpoint filename
+    name_file = f"{model_name}.pth"
+    model_path = Path(__file__).parent.parent.parent / "data" / name_file
     if not model_path.exists():
-        msg = f"Model file not found at {model_path}."
+        msg = "Model file not found."
         raise FileNotFoundError(msg)
 
-    # Instantiate model
+    # Resolve base model key from MODEL_CONFIG
+    for key in MODEL_CONFIG:
+        if model_name.startswith(key):
+            base_key = key
+            break
+    if base_key is None:
+        msg = f"Base model key not found for {model_name}."
+        raise ValueError(msg)
+
+    # Instantiate model using the resolved base model configuration
     config = GPTConfig(
-        emb_dim=MODEL_CONFIG[model_name]["emb_dim"],
-        n_layers=MODEL_CONFIG[model_name]["n_layers"],
-        n_heads=MODEL_CONFIG[model_name]["n_heads"],
+        emb_dim=MODEL_CONFIG[base_key]["emb_dim"],
+        n_layers=MODEL_CONFIG[base_key]["n_layers"],
+        n_heads=MODEL_CONFIG[base_key]["n_heads"],
     )
     model = GPTModel(config)
 
-    # Then load model weights
-    checkpoint = torch.load(model_path, map_location=device, weights_only=True)
-    model.load_state_dict(checkpoint)
+    # Load weights and prepare model
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
 
