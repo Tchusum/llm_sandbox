@@ -1,15 +1,21 @@
 """Fine-tuning utilities for large language models (LLMs)."""
 import json
 import pathlib
+import re
+import time
+from functools import partial
 
 import psutil
 import requests
 import tiktoken
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from llm.utils import download_json
+from llm.extract import query_instruction_data
+from llm.model import generate
+from llm.tokenizer import text_to_token_ids, token_ids_to_text
+from llm.training import load_gpt2_model, train_model_simple
 
 
 def format_input(entry: dict) -> str:
@@ -123,6 +129,45 @@ def custom_collate_fn(
     return inputs_tensor, targets_tensor
 
 
+def create_data_loader(  # noqa: PLR0913
+    data: list,
+    tokenizer: tiktoken.Encoding,
+    batch_size: int,
+    num_workers: int,
+    *,
+    shuffle: bool = True,
+    drop_last: bool = True,
+    device: str = "cpu",
+    allowed_max_length: int = 1024,
+) -> DataLoader:
+    """Create a DataLoader for instruction dataset.
+
+    :param data: Dataset list
+    :param tokenizer: tiktoken encoding
+    :param batch_size: Batch size
+    :param num_workers: Number of workers
+    :param shuffle: Whether to shuffle data
+    :param drop_last: Whether to drop last incomplete batch
+    :param device: Device to move data to
+    :param allowed_max_length: Max sequence length
+    :return: Configured DataLoader
+    """
+    dataset = InstructionDataset(data, tokenizer)
+    collate_fn = partial(
+        custom_collate_fn,
+        device=device,
+        allowed_max_length=allowed_max_length,
+    )
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        collate_fn=collate_fn,
+        shuffle=shuffle,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+
+
 def check_if_running(process_name: str) -> bool:
     """Check if a process with the given name is currently running.
 
@@ -206,107 +251,73 @@ def generate_model_scores(
 
     return scores
 
-if __name__ == "__main__":
+def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
+    model_name: str,
+    dataset_name: str,
+    batch_size: int = 8,
+    num_workers: int = 0,
+    num_epochs: int = 2,
+    allowed_max_length: int = 1024,
+    *,
+    evaluate_with_ollama: bool = True,
+) -> None:
+    """Fine-tune GPT-2 on a supported instruction dataset.
 
-    import re
-    import time
-    from functools import partial
-
-    from torch.utils.data import DataLoader
-
-    from llm.model import generate
-    from llm.tokenizer import text_to_token_ids, token_ids_to_text
-    from llm.training import load_gpt2_model, train_model_simple
-    from llm.utils import download_json
-
-
+    :param model_name: GPT-2 model name to load.
+    :param dataset_name: Instruction dataset name. Supported values include "rasbt" and "alpaca".
+    :param batch_size: Training and validation batch size.
+    :param num_workers: Number of DataLoader workers.
+    :param num_epochs: Number of training epochs.
+    :param allowed_max_length: Maximum token length passed to the collate function.
+    :param evaluate_with_ollama: Whether to score test responses through the local Ollama API.
+    """
     # Download data
-    file_path = "instruction-data.json"
-    url = (
-        "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch"
-        "/main/ch07/01_main-chapter-code/instruction-data.json"
-    )
-
-    data = download_json(file_path, url)
-
-    train_portion = int(len(data) * 0.85)  # 85% for training
-    test_portion = int(len(data) * 0.1)    # 10% for testing
-    val_portion = len(data) - train_portion - test_portion  # Remaining 5% for validation
-
-    train_data = data[:train_portion]
-    test_data = data[train_portion:train_portion + test_portion]
-    val_data = data[train_portion + test_portion:]
+    train_data, val_data, test_data = query_instruction_data(dataset_name)
 
     # Set up data loaders
-    torch.manual_seed(123)
-
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-
-    customized_collate_fn = partial(
-        custom_collate_fn,
-        device=device,
-        allowed_max_length=1024,
-    )
-
     tokenizer = tiktoken.get_encoding("gpt2")
-    train_dataset = InstructionDataset(train_data, tokenizer)
 
-    batch_size = 8
-    num_workers = 0
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        collate_fn=customized_collate_fn,
+    train_loader = create_data_loader(
+        train_data,
+        tokenizer,
+        batch_size,
+        num_workers,
         shuffle=True,
         drop_last=True,
-        num_workers=num_workers,
+        device=device,
+        allowed_max_length=allowed_max_length,
     )
-    val_dataset = InstructionDataset(val_data, tokenizer)
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        collate_fn=customized_collate_fn,
+    val_loader = create_data_loader(
+        val_data,
+        tokenizer,
+        batch_size,
+        num_workers,
         shuffle=False,
         drop_last=False,
-        num_workers=num_workers,
+        device=device,
+        allowed_max_length=allowed_max_length,
     )
 
-    test_dataset = InstructionDataset(test_data, tokenizer)
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        collate_fn=customized_collate_fn,
-        shuffle=False,
-        drop_last=False,
-        num_workers=num_workers,
-    )
-
-    # Load a GPT-2 model and generate text
-    model_name = "gpt2-xl"
-    model, param= load_gpt2_model(model_name)
-
-    token_ids = generate(
-    model=model,
-    idx=text_to_token_ids(format_input(val_data[0]), tokenizer).to(device),
-    max_new_tokens=35,
-    context_size=param.context_length,
-    eos_id=50256,
-    )
-    generated_text = token_ids_to_text(token_ids, tokenizer)
-    print("Generated text:", generated_text)
+    # Load a GPT-2 model
+    model, param = load_gpt2_model(model_name)
 
     # Fine-tune the model on the instruction dataset
     start_time = time.time()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.00005, weight_decay=0.1)
 
-    num_epochs = 2
-
-    train_losses, val_losses, tokens_seen = train_model_simple(
-        model, train_loader, val_loader, optimizer, device,
-        num_epochs=num_epochs, eval_freq=5, eval_iter=5,
-        start_context=format_input(val_data[0]), tokenizer=tokenizer,
+    train_model_simple(
+        model,
+        train_loader,
+        val_loader,
+        optimizer,
+        device,
+        num_epochs=num_epochs,
+        eval_freq=5,
+        eval_iter=5,
+        start_context=format_input(val_data[0]),
+        tokenizer=tokenizer,
     )
 
     end_time = time.time()
@@ -330,17 +341,20 @@ if __name__ == "__main__":
 
         test_data[i]["model_response"] = response_text
 
-
-    with pathlib.Path("instruction-data-with-response.json").open("w") as file:
+    output_path = pathlib.Path("data")
+    response_path = output_path / f"instruction-data-{dataset_name}-with-response.json"
+    with response_path.open("w") as file:
         json.dump(test_data, file, indent=4)  # "indent" for pretty-printing
 
-    print(test_data[0])
-
-    file_name = f"{re.sub(r'[ ()]', '', model_name) }-sft.pth"
-    torch.save(model.state_dict(), f"data/{file_name}")
+    normalized_model_name = re.sub(r"[ ()]", "", model_name)
+    file_name = f"{normalized_model_name}-{dataset_name}-sft.pth"
+    torch.save(model.state_dict(), output_path / file_name)
     print(f"Model saved as {file_name}")
 
     # Evaluate the model responses using the scoring function
+    if not evaluate_with_ollama:
+        return
+
     ollama_running = check_if_running("ollama")
 
     if not ollama_running:
@@ -351,3 +365,11 @@ if __name__ == "__main__":
     scores = generate_model_scores(test_data, "model_response")
     print(f"Number of scores: {len(scores)} of {len(test_data)}")
     print(f"Average score: {sum(scores)/len(scores):.2f}\n")
+
+
+if __name__ == "__main__":
+
+    torch.manual_seed(123)
+    model_name = "gpt2-xl"
+    gpt2_fine_tuning_wrapper(model_name, dataset_name="rasbt")
+

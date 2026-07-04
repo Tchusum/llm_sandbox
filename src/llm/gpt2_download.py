@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 
 import numpy as np
-import requests
 import tensorflow as tf
-from tqdm import tqdm
+
+from llm.extract import download_file
 
 
 def download_and_load_gpt2(model_size: str, models_dir: str) -> dict:
@@ -43,39 +43,6 @@ def download_and_load_gpt2(model_size: str, models_dir: str) -> dict:
     with (Path(model_dir) / "hparams.json").open("r", encoding="utf-8") as f:
         settings = json.load(f)
     return load_gpt2_params_from_tf_ckpt(tf_ckpt_path, settings)
-
-
-
-def download_file(url: str, destination: Path) -> None:
-    """Download a file from a URL with progress tracking.
-
-    :param url: The URL of the file to download.
-    :param destination: The local path where the file will be saved.
-    """
-    # Send a GET request to download the file in streaming mode
-    response = requests.get(url, stream=True, timeout=30)
-
-    # Get the total file size from headers, defaulting to 0 if not present
-    file_size = int(response.headers.get("content-length", 0))
-
-    # Check if file exists and has the same size
-    if destination.exists():
-        file_size_local = destination.stat().st_size
-        if file_size == file_size_local:
-            print(f"File already exists and is up-to-date: {destination}")
-            return
-
-    # Define the block size for reading the file
-    block_size = 1024  # 1 Kilobyte
-
-    # Initialize the progress bar with total file size
-    progress_bar_description = url.rsplit("/", 1)[-1]  # Extract filename from URL
-    with tqdm(total=file_size, unit="iB", unit_scale=True, desc=progress_bar_description) as progress_bar, \
-            destination.open("wb") as file:
-        # Iterate over the file data in chunks
-        for chunk in response.iter_content(block_size):
-            progress_bar.update(len(chunk))
-            file.write(chunk)
 
 
 def load_gpt2_params_from_tf_ckpt(ckpt_path: str, settings: dict) -> dict:
