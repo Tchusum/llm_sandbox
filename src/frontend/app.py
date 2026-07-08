@@ -5,11 +5,12 @@ import torch
 
 from frontend.llm_call import llm_call
 from llm.model import GPTConfig, GPTModel, load_model
+from llm.utils import get_device
 
 
 @st.cache_resource
-def get_device() -> torch.device:
-    return torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+def get_device_st() -> torch.device:
+    return get_device()
 
 
 @st.cache_resource
@@ -28,7 +29,7 @@ def app() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    device = get_device()
+    device = get_device_st()
     tokenizer = get_tokenizer()
     model, config = get_model_and_config(device)
 

@@ -3,6 +3,7 @@
 Including the main components such as multi-head attention, feed-forward networks, and layer normalization.
 """
 from pathlib import Path
+from xml.parsers.expat import model
 
 import torch
 from pydantic import BaseModel
@@ -212,6 +213,7 @@ def load_model(model_name: str, device: torch.device) -> tuple[GPTModel, GPTConf
     return model, config
 
 
+@torch.inference_mode()
 def generate(  # noqa: PLR0913
     model: GPTModel,
     idx: torch.Tensor,
@@ -237,21 +239,16 @@ def generate(  # noqa: PLR0913
     # remember original input length (to optionally exclude it from output)
     orig_len = idx.shape[1]
 
-    # Get logits, and only focus on last time step
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]
-        with torch.no_grad():
-            logits = model(idx_cond)
-        logits = logits[:, -1, :]
+        logits = model(idx_cond)[:, -1, :]
 
-        # Filter logits with top_k sampling
         if top_k is not None:
-            # Keep only top_k values
             top_logits, _ = torch.topk(logits, top_k)
-            min_val = top_logits[:, -1]
-            logits = torch.where(logits < min_val, torch.tensor(float("-inf")).to(logits.device), logits)
+            min_val = top_logits[:, -1].unsqueeze(-1)  # shape (batch, 1)
+            mask = logits < min_val
+            logits = logits.masked_fill(mask, float("-inf"))
 
-        # Apply temperature scaling
         if temperature > 0.0:
             logits = logits / temperature
 
@@ -269,10 +266,9 @@ def generate(  # noqa: PLR0913
         else:
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch_size, 1)
 
-        if eos_id is not None:  # noqa: SIM102
-            # Stop generating early if end-of-sequence token is encountered for all batch items
-            if (idx_next == eos_id).all():
-                break
+        # check if the generated token is the end-of-sequence token
+        if eos_id is not None and (idx_next == eos_id).all():
+            break
 
         # append sampled index to the running sequence
         idx = torch.cat((idx, idx_next), dim=1)  # (batch_size, num_tokens+1)

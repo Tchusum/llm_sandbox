@@ -7,6 +7,7 @@ from llm.config import MODEL_CONFIG
 from llm.gpt2_download import download_and_load_gpt2
 from llm.model import GPTConfig, GPTModel, generate
 from llm.tokenizer import text_to_token_ids, token_ids_to_text
+from llm.utils import get_device
 
 
 def load_gpt2_model(model_name: str) -> tuple[GPTModel, GPTConfig]:
@@ -30,7 +31,7 @@ def load_gpt2_model(model_name: str) -> tuple[GPTModel, GPTConfig]:
 
     load_weights_into_gpt(gpt, params)
 
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = get_device()
     gpt.to(device)
 
     return gpt, config
@@ -125,9 +126,10 @@ if __name__ == "__main__":
 
     tokenizer = tiktoken.get_encoding("gpt2")
 
+    device = get_device()
     token_ids = generate(
         model=gpt,
-        idx=text_to_token_ids("Every effort moves you", tokenizer).to("cpu"),
+        idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
         max_new_tokens=25,
         context_size=config.context_length,
         top_k=50,

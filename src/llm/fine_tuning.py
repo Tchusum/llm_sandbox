@@ -16,6 +16,7 @@ from llm.extract import query_instruction_data
 from llm.model import generate
 from llm.tokenizer import text_to_token_ids, token_ids_to_text
 from llm.training import load_gpt2_model, train_model_simple
+from llm.utils import get_device
 
 
 def format_input(entry: dict) -> str:
@@ -280,7 +281,7 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     train_data, val_data, test_data = query_instruction_data(dataset_name, max_samples=max_samples)
 
     # Set up data loaders
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    device = get_device()
     tokenizer = tiktoken.get_encoding("gpt2")
 
     train_loader = create_data_loader(

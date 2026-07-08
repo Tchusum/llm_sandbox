@@ -4,8 +4,9 @@ version = "0.1.0"
 description = "build_llm_from_scratch"
 requires-python = "~=3.12.0"
 dependencies = [
+    "reasoning_from_scratch @ git+https://github.com/rasbt/reasoning-from-scratch.git@main",
     "ruff>=0.15.12",
-    "torch>=2.12.0",
+    "torch~=2.10.0",
     "tiktoken>=0.13.0",
     "numpy>=2.4.6",
     "pydantic>=2.13.4",
@@ -21,6 +22,9 @@ packages = [
     "src/llm",
     "src/frontend",
 ]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [build-system]
 requires = ["hatchling"]
@@ -45,5 +49,6 @@ ignore = [
     "TD003", # Issue link in TODO
     "FIX002", # Line contains TODO
     "T201", # Print() statements
-    "D103" # Docstrings
+    "D103", # Docstrings
+    "D100" # Module Docstrings
 ]
