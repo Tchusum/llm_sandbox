@@ -1,7 +1,7 @@
 [project]
-name = "build_llm_from_scratch"
+name = "llm_sandbox"
 version = "0.1.0"
-description = "build_llm_from_scratch"
+
 requires-python = "~=3.12.0"
 dependencies = [
     "reasoning_from_scratch @ git+https://github.com/rasbt/reasoning-from-scratch.git@main",
