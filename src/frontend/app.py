@@ -4,7 +4,7 @@ import tiktoken
 import torch
 
 from frontend.llm_call import llm_call
-from llm.model import GPTConfig, GPTModel, load_model
+from llm.models import GPTConfig, GPTModel, load_model
 from llm.utils import get_device
 
 

@@ -13,9 +13,9 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from llm.extract import query_instruction_data
-from llm.model import generate
+from llm.models import generate
 from llm.tokenizer import text_to_token_ids, token_ids_to_text
-from llm.training import load_gpt2_model, train_model_simple
+from llm.gpt.training import load_gpt2_model, train_model_simple
 from llm.utils import get_device
 
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from reasoning_from_scratch.qwen3 import QWEN_CONFIG_06_B, Qwen3Model, Qwen3Tokenizer, download_qwen3_small
 
-from llm.model import generate
+from llm.models import generate
 from llm.tokenizer import token_ids_to_text
 from llm.utils import get_device
 

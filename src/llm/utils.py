@@ -4,7 +4,7 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-def get_device():
+def get_device() -> torch.device:
 
     if torch.cuda.is_available():
         device = torch.device("cuda")

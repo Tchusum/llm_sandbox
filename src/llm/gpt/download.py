@@ -1,14 +1,13 @@
-"""Module for downloading and loading GPT-2 models."""
 import json
 from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
 
-from llm.extract import download_file
+from llm.extract import download_url_file
 
 
-def download_and_load_gpt2(model_size: str, models_dir: str) -> dict:
+def download_param(model_size: str, models_dir: str) -> dict:
     """Download and load GPT-2 model parameters from TensorFlow checkpoints.
 
     :param model_size: The size of the GPT-2 model to download
@@ -36,7 +35,7 @@ def download_and_load_gpt2(model_size: str, models_dir: str) -> dict:
     for filename in filenames:
         file_url = f"{base_url}/{model_size}/{filename}"
         file_path = Path(model_dir) / filename
-        download_file(file_url, file_path)
+        download_url_file(file_url, file_path)
 
     # Load settings and params
     tf_ckpt_path = tf.train.latest_checkpoint(model_dir)
@@ -83,5 +82,5 @@ def load_gpt2_params_from_tf_ckpt(ckpt_path: str, settings: dict) -> dict:
 if __name__ == "__main__":
     model_size = "124M"
     models_dir = "data/gpt2"
-    params = download_and_load_gpt2(model_size, models_dir)
+    params = download_param(model_size, models_dir)
     print(f"Loaded GPT-2 model parameters for size {model_size}.")

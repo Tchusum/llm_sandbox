@@ -1,16 +1,18 @@
-"""Module for tokenization and detokenization of text using a tokenizer."""
 import tiktoken
 import torch
+from reasoning_from_scratch.qwen3 import Qwen3Tokenizer
 
 
-def text_to_token_ids(text: str, tokenizer: tiktoken.Encoding) -> torch.Tensor:
-    """Convert raw text to a tensor of token IDs using the provided tokenizer.
+def text_to_token_ids(text: str, tokenizer: tiktoken.Encoding | Qwen3Tokenizer) -> torch.Tensor:
 
-    :param text: The input text string to be tokenized.
-    :param tokenizer: An instance of tiktoken.Encoding used for tokenization.
-    :return: A torch.Tensor containing the token IDs, with a batch dimension added.
-    """
-    encoded = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+    if isinstance(tokenizer, Qwen3Tokenizer):
+        encoded = tokenizer.encode(text)
+    elif isinstance(tokenizer, tiktoken.Encoding):
+        encoded = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+    else:
+        msg = "Unsupported tokenizer type. Must be Qwen3Tokenizer or tiktoken.Encoding."
+        raise TypeError(msg)
+
     return torch.tensor(encoded).unsqueeze(0) # add batch dimension
 
 

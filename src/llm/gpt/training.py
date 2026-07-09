@@ -3,9 +3,9 @@ import numpy as np
 import tiktoken
 import torch
 
-from llm.config import MODEL_CONFIG
-from llm.gpt2_download import download_and_load_gpt2
-from llm.model import GPTConfig, GPTModel, generate
+from llm.gpt.config import MODEL_CONFIG
+from llm.gpt.download import download_and_load_gpt2
+from llm.models import GPTConfig, GPTModel, generate
 from llm.tokenizer import text_to_token_ids, token_ids_to_text
 from llm.utils import get_device
 
@@ -118,25 +118,6 @@ def load_weights_into_gpt(
     gpt.final_norm.scale = assign(gpt.final_norm.scale, params["g"])
     gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
     gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
-
-if __name__ == "__main__":
-    torch.manual_seed(123)
-
-    gpt, config = load_gpt2_model("gpt2-small")
-
-    tokenizer = tiktoken.get_encoding("gpt2")
-
-    device = get_device()
-    token_ids = generate(
-        model=gpt,
-        idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
-        max_new_tokens=25,
-        context_size=config.context_length,
-        top_k=50,
-        temperature=1.5,
-    )
-
-    print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
 
 
 def calc_loss_batch(
@@ -301,3 +282,22 @@ def train_model_simple(  # noqa: PLR0913
         )
 
     return train_losses, val_losses, track_tokens_seen
+
+if __name__ == "__main__":
+    torch.manual_seed(123)
+
+    gpt, config = load_gpt2_model("gpt2-small")
+
+    tokenizer = tiktoken.get_encoding("gpt2")
+
+    device = get_device()
+    token_ids = generate(
+        model=gpt,
+        idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
+        max_new_tokens=25,
+        context_size=config.context_length,
+        top_k=50,
+        temperature=1.5,
+    )
+
+    print("Output text:\n", token_ids_to_text(token_ids, tokenizer))

@@ -49,6 +49,9 @@ ignore = [
     "TD003", # Issue link in TODO
     "FIX002", # Line contains TODO
     "T201", # Print() statements
-    "D103", # Docstrings
-    "D100" # Module Docstrings
+    "D100", # Docstrings
+    "D101",
+    "D102",
+    "D103",
+    "D107"
 ]
