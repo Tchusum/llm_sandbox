@@ -162,6 +162,7 @@ def generate_and_print(
     tokenizer: tiktoken.Encoding,
     device: torch.device,
     start_context: str,
+    eos_id: int | None = None,
 ) -> None:
     """Generate a sample text from the model and print it.
 
@@ -169,14 +170,18 @@ def generate_and_print(
     :param tokenizer: The tokenizer used for encoding and decoding text.
     :param device: The device (CPU or GPU) to run the generation on.
     :param start_context: The initial context string for generating sample text.
+    :param eos_id: Optional end-of-sequence token ID to stop generation early.
     """
     model.eval()
     context_size = model.pos_emb.weight.shape[0]
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with torch.no_grad():
         token_ids = generate(
-            model=model, idx=encoded,
-            max_new_tokens=50, context_size=context_size,
+            model=model,
+            idx=encoded,
+            max_new_tokens=50,
+            context_size=context_size,
+            eos_id=eos_id,
         )
     decoded_text = token_ids_to_text(token_ids, tokenizer)
     print(decoded_text.replace("\n", " "))  # Compact print format

@@ -1,6 +1,7 @@
 import tiktoken
 import torch
 
+from llm_sandbox.llm.gpt.config import EOS_ID
 from llm_sandbox.llm.models import GPTConfig, GPTModel, generate
 from llm_sandbox.llm.tokenizer import text_to_token_ids, token_ids_to_text
 
@@ -48,7 +49,7 @@ if __name__ == "__main__":
     #tokenizer = tiktoken.get_encoding("gpt2")
     #gpt_model = LLMGPTModel()
     #model_name = "gpt2-xl-alpaca-sft.pth"
-    #eos_id = 50256
+    #eos_id = EOS_ID
 
     tokenizer_path = Path("data/qwen3/tokenizer-base.json")
     tokenizer = Qwen3Tokenizer(tokenizer_file_path=tokenizer_path)

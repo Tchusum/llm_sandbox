@@ -49,5 +49,6 @@ ignore = [
     "D102",
     "D103",
     "D107",
-    "G004" # Logging statement uses f-string
+    "G004", # Logging statement uses f-string
+    "RET504" # Unnecessary assignment to `logger` before `return` statement
 ]

@@ -8,6 +8,9 @@ MODEL_CONFIG = {
     "gpt2-xl": {"size": "1558M", "emb_dim": 1600, "n_layers": 48, "n_heads": 25},
 }
 
+ # End-of-sequence token ID for GPT-2 models
+EOS_ID = 50256
+
 class GPTConfig(BaseModel):
     """Configuration for the GPT-like language model."""
 

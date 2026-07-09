@@ -1,5 +1,4 @@
 import json
-import logging
 import re
 import time
 from functools import partial
@@ -12,13 +11,14 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+from llm_sandbox.llm.gpt.config import EOS_ID
 from llm_sandbox.llm.gpt.extract import query_instruction_data
 from llm_sandbox.llm.gpt.training import load_gpt2_model_raw, train_model
 from llm_sandbox.llm.models import generate
 from llm_sandbox.llm.tokenizer import text_to_token_ids, token_ids_to_text
-from llm_sandbox.llm.utils import get_device
+from llm_sandbox.llm.utils import get_device, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def format_input(entry: dict) -> str:
@@ -77,7 +77,7 @@ class InstructionDataset(Dataset):
 
 def custom_collate_fn(
     batch: list,
-    pad_token_id: int = 50256,
+    pad_token_id: int = EOS_ID,
     ignore_index: int = -100,
     allowed_max_length: int | None = None,
     device: str = "cpu",
@@ -278,6 +278,8 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     :param max_samples: Optional maximum number of samples to use from the dataset.
     :param evaluate_with_ollama: Whether to score test responses through the local Ollama API.
     """
+    logger.info(f"Starting fine-tuning for model: {model_name} on dataset: {dataset_name}")
+
     # Download data
     train_data, val_data, test_data = query_instruction_data(dataset_name, max_samples=max_samples)
 
@@ -342,7 +344,7 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
             idx=text_to_token_ids(input_text, tokenizer).to(device),
             max_new_tokens=256,
             context_size=param.context_length,
-            eos_id=50256,
+            eos_id=EOS_ID,
         )
         generated_text = token_ids_to_text(token_ids, tokenizer)
         response_text = generated_text[len(input_text):].replace("### Response:", "").strip()

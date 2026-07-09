@@ -3,7 +3,7 @@ import numpy as np
 import tiktoken
 import torch
 
-from llm_sandbox.llm.gpt.config import MODEL_CONFIG
+from llm_sandbox.llm.gpt.config import EOS_ID, MODEL_CONFIG
 from llm_sandbox.llm.gpt.download import download_param
 from llm_sandbox.llm.models import GPTConfig, GPTModel, generate_and_print
 from llm_sandbox.llm.utils import get_device
@@ -251,7 +251,11 @@ def train_model(  # noqa: PLR0913
 
         # Print a sample text after each epoch
         generate_and_print(
-            model, tokenizer, device, start_context,
+            model,
+            tokenizer,
+            device,
+            start_context,
+            eos_id=EOS_ID,
         )
 
     return train_losses, val_losses, track_tokens_seen
