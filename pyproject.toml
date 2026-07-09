@@ -15,13 +15,11 @@ dependencies = [
     "psutil>=7.2.2",
     "flatbuffers>=25.12.19",
     "streamlit>=1.58.0",
+    "requests>=2.34.2",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = [
-    "src/llm",
-    "src/frontend",
-]
+packages = ["src/llm_sandbox"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -32,9 +30,6 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 cache-dir = "./.cache/uv"       
-
-[tool.uv.workspace]
-exclude=["**/"]
 
 [tool.ruff]
 cache-dir = "./.cache/ruff"
@@ -53,5 +48,6 @@ ignore = [
     "D101",
     "D102",
     "D103",
-    "D107"
+    "D107",
+    "G004" # Logging statement uses f-string
 ]

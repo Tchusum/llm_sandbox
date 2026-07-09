@@ -1,8 +1,8 @@
 import tiktoken
 import torch
 
-from llm.models import GPTConfig, GPTModel, generate
-from llm.tokenizer import text_to_token_ids, token_ids_to_text
+from llm_sandbox.llm.models import GPTConfig, GPTModel, generate
+from llm_sandbox.llm.tokenizer import text_to_token_ids, token_ids_to_text
 
 
 def llm_call(
@@ -40,8 +40,8 @@ if __name__ == "__main__":
 
     from reasoning_from_scratch.qwen3 import Qwen3Tokenizer
 
-    from llm.models import LLMGPTModel, LLMQwen3Model
-    from llm.utils import get_device
+    from llm_sandbox.llm.models import LLMGPTModel, LLMQwen3Model
+    from llm_sandbox.llm.utils import get_device
 
     device = get_device()
 

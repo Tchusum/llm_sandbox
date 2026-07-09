@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from reasoning_from_scratch.qwen3 import QWEN_CONFIG_06_B, Qwen3Model, download_qwen3_small
 
-from llm.gpt.config import MODEL_CONFIG
-from llm.gpt.model import GPTConfig, GPTModel
-from llm.qwen3.config import QWENConfig06B
+from llm_sandbox.llm.gpt.config import MODEL_CONFIG
+from llm_sandbox.llm.gpt.model import GPTConfig, GPTModel
+from llm_sandbox.llm.qwen3.config import QWENConfig06B
+from llm_sandbox.llm.tokenizer import text_to_token_ids, token_ids_to_text
+
+if TYPE_CHECKING:
+    import tiktoken
 
 
 class LLMModel(ABC):
@@ -150,3 +155,29 @@ def generate(  # noqa: PLR0913
     if exclude_input:
         return idx[:, orig_len:]
     return idx
+
+
+def generate_and_print(
+    model: GPTModel,
+    tokenizer: tiktoken.Encoding,
+    device: torch.device,
+    start_context: str,
+) -> None:
+    """Generate a sample text from the model and print it.
+
+    :param model: The GPT model used for generating text.
+    :param tokenizer: The tokenizer used for encoding and decoding text.
+    :param device: The device (CPU or GPU) to run the generation on.
+    :param start_context: The initial context string for generating sample text.
+    """
+    model.eval()
+    context_size = model.pos_emb.weight.shape[0]
+    encoded = text_to_token_ids(start_context, tokenizer).to(device)
+    with torch.no_grad():
+        token_ids = generate(
+            model=model, idx=encoded,
+            max_new_tokens=50, context_size=context_size,
+        )
+    decoded_text = token_ids_to_text(token_ids, tokenizer)
+    print(decoded_text.replace("\n", " "))  # Compact print format
+    model.train()

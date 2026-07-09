@@ -1,15 +1,15 @@
-from llm.extract import download_json, split_instruction_data
+from llm_sandbox.llm.extract import download_json, split_instruction_data
 
 INSTRUCTION_DATASETS = {
     "rasbt": {
-        "file_path": "data/instruction-data-rasbt.json",
+        "file_path": "data/gpt2/instruction-data-rasbt.json",
         "url": (
             "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch"
             "/main/ch07/01_main-chapter-code/instruction-data.json"
         ),
     },
     "alpaca": {
-        "file_path": "data/instruction-data-alpaca.json",
+        "file_path": "data/gpt2/instruction-data-alpaca.json",
         "url": "https://raw.githubusercontent.com/tatsu-lab/stanford_alpaca/main/alpaca_data.json",
     },
 }

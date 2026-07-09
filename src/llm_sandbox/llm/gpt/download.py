@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 
-from llm.extract import download_url_file
+from llm_sandbox.llm.extract import download_url_file
 
 
 def download_param(model_size: str, models_dir: str) -> dict:

@@ -3,14 +3,13 @@ import numpy as np
 import tiktoken
 import torch
 
-from llm.gpt.config import MODEL_CONFIG
-from llm.gpt.download import download_and_load_gpt2
-from llm.models import GPTConfig, GPTModel, generate
-from llm.tokenizer import text_to_token_ids, token_ids_to_text
-from llm.utils import get_device
+from llm_sandbox.llm.gpt.config import MODEL_CONFIG
+from llm_sandbox.llm.gpt.download import download_param
+from llm_sandbox.llm.models import GPTConfig, GPTModel, generate_and_print
+from llm_sandbox.llm.utils import get_device
 
 
-def load_gpt2_model(model_name: str) -> tuple[GPTModel, GPTConfig]:
+def load_gpt2_model_raw(model_name: str) -> tuple[GPTModel, GPTConfig]:
     """Load a GPT-2 model with pretrained weights from TensorFlow checkpoints.
 
     :param model_name: The name of the GPT-2 model to load (e.g., "gpt2-small (124M)").
@@ -24,7 +23,7 @@ def load_gpt2_model(model_name: str) -> tuple[GPTModel, GPTConfig]:
         qkv_bias=True,
     )
 
-    params = download_and_load_gpt2(model_size=MODEL_CONFIG[model_name]["size"], models_dir="data/gpt2")
+    params = download_param(model_size=MODEL_CONFIG[model_name]["size"], models_dir="data/gpt2")
 
     gpt = GPTModel(config)
     gpt.eval()
@@ -190,33 +189,7 @@ def evaluate_model(
     return train_loss, val_loss
 
 
-def generate_and_print_sample(
-    model: GPTModel,
-    tokenizer: tiktoken.Encoding,
-    device: torch.device,
-    start_context: str,
-) -> None:
-    """Generate a sample text from the model and print it.
-
-    :param model: The GPT model used for generating text.
-    :param tokenizer: The tokenizer used for encoding and decoding text.
-    :param device: The device (CPU or GPU) to run the generation on.
-    :param start_context: The initial context string for generating sample text.
-    """
-    model.eval()
-    context_size = model.pos_emb.weight.shape[0]
-    encoded = text_to_token_ids(start_context, tokenizer).to(device)
-    with torch.no_grad():
-        token_ids = generate(
-            model=model, idx=encoded,
-            max_new_tokens=50, context_size=context_size,
-        )
-    decoded_text = token_ids_to_text(token_ids, tokenizer)
-    print(decoded_text.replace("\n", " "))  # Compact print format
-    model.train()
-
-
-def train_model_simple(  # noqa: PLR0913
+def train_model(  # noqa: PLR0913
     model: GPTModel,
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
@@ -277,27 +250,8 @@ def train_model_simple(  # noqa: PLR0913
                       f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
 
         # Print a sample text after each epoch
-        generate_and_print_sample(
+        generate_and_print(
             model, tokenizer, device, start_context,
         )
 
     return train_losses, val_losses, track_tokens_seen
-
-if __name__ == "__main__":
-    torch.manual_seed(123)
-
-    gpt, config = load_gpt2_model("gpt2-small")
-
-    tokenizer = tiktoken.get_encoding("gpt2")
-
-    device = get_device()
-    token_ids = generate(
-        model=gpt,
-        idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
-        max_new_tokens=25,
-        context_size=config.context_length,
-        top_k=50,
-        temperature=1.5,
-    )
-
-    print("Output text:\n", token_ids_to_text(token_ids, tokenizer))

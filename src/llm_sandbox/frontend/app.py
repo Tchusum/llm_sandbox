@@ -3,9 +3,9 @@ import streamlit as st
 import tiktoken
 import torch
 
-from frontend.llm_call import llm_call
-from llm.models import GPTConfig, GPTModel, load_model
-from llm.utils import get_device
+from llm_sandbox.frontend.llm_call import llm_call
+from llm_sandbox.llm.models import GPTConfig, GPTModel, load_model
+from llm_sandbox.llm.utils import get_device
 
 
 @st.cache_resource

@@ -1,9 +1,9 @@
-"""Fine-tuning utilities for large language models (LLMs)."""
 import json
-import pathlib
+import logging
 import re
 import time
 from functools import partial
+from pathlib import Path
 
 import psutil
 import requests
@@ -12,11 +12,13 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from llm.extract import query_instruction_data
-from llm.models import generate
-from llm.tokenizer import text_to_token_ids, token_ids_to_text
-from llm.gpt.training import load_gpt2_model, train_model_simple
-from llm.utils import get_device
+from llm_sandbox.llm.gpt.extract import query_instruction_data
+from llm_sandbox.llm.gpt.training import load_gpt2_model_raw, train_model
+from llm_sandbox.llm.models import generate
+from llm_sandbox.llm.tokenizer import text_to_token_ids, token_ids_to_text
+from llm_sandbox.llm.utils import get_device
+
+logger = logging.getLogger(__name__)
 
 
 def format_input(entry: dict) -> str:
@@ -247,7 +249,7 @@ def generate_model_scores(
         try:
             scores.append(int(score))
         except ValueError:
-            print(f"Could not convert score: {score}")
+            logger.info(f"Could not convert score: {score}")
             continue
 
     return scores
@@ -272,8 +274,7 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     :param num_workers: Number of DataLoader workers.
     :param num_epochs: Number of training epochs.
     :param allowed_max_length: Maximum token length passed to the collate function.
-        :param accumulation_steps: Number of batches to accumulate gradients over. Use 4 with batch_size=2
-                                to simulate batch_size=8 with less memory.
+    :param accumulation_steps: Number of gradient accumulation steps for training.
     :param max_samples: Optional maximum number of samples to use from the dataset.
     :param evaluate_with_ollama: Whether to score test responses through the local Ollama API.
     """
@@ -306,14 +307,14 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     )
 
     # Load a GPT-2 model
-    model, param = load_gpt2_model(model_name)
+    model, param = load_gpt2_model_raw(model_name)
 
     # Fine-tune the model on the instruction dataset
     start_time = time.time()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.00005, weight_decay=0.1)
 
-    train_model_simple(
+    train_model(
         model,
         train_loader,
         val_loader,
@@ -329,7 +330,7 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
 
     end_time = time.time()
     execution_time_minutes = (end_time - start_time) / 60
-    print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+    logger.info(f"Training completed in {execution_time_minutes:.2f} minutes.")
 
     # Generate model responses for the test dataset
     for i, entry in tqdm(enumerate(test_data), total=len(test_data)):
@@ -348,15 +349,15 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
 
         test_data[i]["model_response"] = response_text
 
-    output_path = pathlib.Path("data")
+    output_path = Path("data/gpt2")
     response_path = output_path / f"instruction-data-{dataset_name}-with-response.json"
     with response_path.open("w") as file:
-        json.dump(test_data, file, indent=4)  # "indent" for pretty-printing
+        json.dump(test_data, file, indent=4)
 
     normalized_model_name = re.sub(r"[ ()]", "", model_name)
     file_name = f"{normalized_model_name}-{dataset_name}-sft.pth"
     torch.save(model.state_dict(), output_path / file_name)
-    print(f"Model saved as {file_name}")
+    logger.info(f"Model saved as {file_name}")
 
     # Evaluate the model responses using the scoring function
     if not evaluate_with_ollama:
@@ -367,21 +368,20 @@ def gpt2_fine_tuning_wrapper(  # noqa: PLR0913
     if not ollama_running:
         msg = "Ollama not running. Launch ollama before proceeding."
         raise RuntimeError(msg)
-    print("Ollama running:", check_if_running("ollama"))
+    logger.info(f"Ollama running: {ollama_running}")
 
     scores = generate_model_scores(test_data, "model_response")
-    print(f"Number of scores: {len(scores)} of {len(test_data)}")
-    print(f"Average score: {sum(scores)/len(scores):.2f}\n")
+    logger.info(f"Number of scores: {len(scores)} of {len(test_data)}")
+    logger.info(f"Average score: {sum(scores)/len(scores):.2f}\n")
 
 
 if __name__ == "__main__":
 
     torch.manual_seed(123)
-    model_name = "gpt2-xl"
+    model_name = "gpt2-medium"
     gpt2_fine_tuning_wrapper(
         model_name,
-        dataset_name="alpaca",
-        batch_size=1,
-        max_samples=500,
+        dataset_name="rasbt",
+        batch_size=8,
     )
 

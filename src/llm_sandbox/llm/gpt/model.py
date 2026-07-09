@@ -1,8 +1,8 @@
 import torch
 from torch import nn
 
-from llm.gpt.attention import MultiHeadAttention, MultiHeadAttentionConfig
-from llm.gpt.config import GPTConfig
+from llm_sandbox.llm.gpt.attention import MultiHeadAttention, MultiHeadAttentionConfig
+from llm_sandbox.llm.gpt.config import GPTConfig
 
 
 class GELU(nn.Module):
