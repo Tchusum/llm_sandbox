@@ -1,4 +1,5 @@
 
+import tiktoken
 from pydantic import BaseModel
 
 MODEL_CONFIG = {
@@ -8,8 +9,17 @@ MODEL_CONFIG = {
     "gpt2-xl": {"size": "1558M", "emb_dim": 1600, "n_layers": 48, "n_heads": 25},
 }
 
- # End-of-sequence token ID for GPT-2 models
 EOS_ID = 50256
+
+def get_model_schema_gpt() -> dict:
+    """Used to avoid circular imports when importing GPTModel in llm_call.py."""
+    from llm_sandbox.llm.models import LLMGPTModel
+    return {
+        "tokenizer": tiktoken.get_encoding("gpt2"),
+        "model": LLMGPTModel(),
+        "name": "gpt2-xl-alpaca-sft.pth",
+        "eos_id": EOS_ID,
+    }
 
 class GPTConfig(BaseModel):
     """Configuration for the GPT-like language model."""

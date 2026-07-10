@@ -1,24 +1,25 @@
 import tiktoken
 import torch
+from reasoning_from_scratch.qwen3 import Qwen3Tokenizer
 
-from llm_sandbox.llm.gpt.config import EOS_ID
-from llm_sandbox.llm.models import GPTConfig, GPTModel, generate
+from llm_sandbox.llm.gpt.config import GPTConfig
+from llm_sandbox.llm.models import generate
+from llm_sandbox.llm.qwen3.config import QWENConfig06B
+from llm_sandbox.llm.schemas import LLMModel
 from llm_sandbox.llm.tokenizer import text_to_token_ids, token_ids_to_text
 
 
 def llm_call(
     prompt: str,
-    model: GPTModel,
-    config: GPTConfig,
-    tokenizer: tiktoken.Encoding,
+    model_instance: LLMModel,
+    tokenizer: tiktoken.Encoding | Qwen3Tokenizer,
     device: torch.device,
-    eos_id: int
+    eos_id: int,
 ) -> str:
     """Call the LLM model with a given prompt and return the response.
 
     :param prompt: The input prompt to send to the LLM model.
-    :param model: The LLM model to use for generating the response.
-    :param config: The configuration for the LLM model.
+    :param model_instance: The LLM model instance to use for generating the response.
     :param tokenizer: The tokenizer to use for encoding and decoding text.
     :param device: The device (CPU or GPU) to run the model on.
     :param eos_id: The end-of-sequence token ID for the model.
@@ -27,37 +28,27 @@ def llm_call(
     prompt_token = text_to_token_ids(prompt, tokenizer).to(device)
 
     response_token = generate(
-        model=model,
+        model_instance=model_instance.model,
         idx=prompt_token,
         max_new_tokens=256,
-        context_size=config.context_length,
+        context_size=model_instance.model.config.context_length,
         eos_id=eos_id,
         exclude_input=True,
     )
     return token_ids_to_text(response_token, tokenizer)
 
 if __name__ == "__main__":
-    from pathlib import Path
 
-    from reasoning_from_scratch.qwen3 import Qwen3Tokenizer
-
-    from llm_sandbox.llm.models import LLMGPTModel, LLMQwen3Model
+    from llm_sandbox.llm.gpt.config import get_model_schema_gpt
+    from llm_sandbox.llm.qwen3.config import get_model_schema_qwen3
+    from llm_sandbox.llm.schemas import LLMModel
     from llm_sandbox.llm.utils import get_device
 
     device = get_device()
 
-    #tokenizer = tiktoken.get_encoding("gpt2")
-    #gpt_model = LLMGPTModel()
-    #model_name = "gpt2-xl-alpaca-sft.pth"
-    #eos_id = EOS_ID
+    model_instance= LLMModel.model_validate(get_model_schema_qwen3())
 
-    tokenizer_path = Path("data/qwen3/tokenizer-base.json")
-    tokenizer = Qwen3Tokenizer(tokenizer_file_path=tokenizer_path)
-    gpt_model = LLMQwen3Model()
-    model_name = "qwen3-0.6B-base.pth"
-    eos_id = tokenizer.eos_token_id
-
-    gpt_model.load(model_name, device)
+    model_instance.model.load(model_instance.name, device=device)
 
     prompt = """
     Below is an instruction that describes a task.
@@ -67,5 +58,11 @@ if __name__ == "__main__":
     What is the capital of Sweden?
     """
 
-    response = llm_call(prompt, gpt_model.model, gpt_model.config, tokenizer, device, eos_id)
+    response = llm_call(
+        prompt,
+        model_instance,
+        model_instance.tokenizer,
+        device,
+        model_instance.eos_id)
+
     print(response)

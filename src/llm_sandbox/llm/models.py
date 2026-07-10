@@ -29,7 +29,7 @@ class LLMGPTModel(LLMModel):
         model_path_input = Path("data/gpt2")
 
         # Resolve checkpoint filename
-        model_path = Path(__file__).parent.parent.parent / model_path_input / model_name
+        model_path = Path(__file__).parent.parent.parent.parent / model_path_input / model_name
         if not model_path.exists():
             msg = "Model file not found."
             raise FileNotFoundError(msg)
@@ -93,8 +93,8 @@ class LLMQwen3Model(LLMModel):
 
 
 @torch.inference_mode()
-def generate(  # noqa: PLR0913
-    model: GPTModel,
+def generate(
+    model_instance: LLMModel,
     idx: torch.Tensor,
     max_new_tokens: int,
     context_size: int,
@@ -106,7 +106,7 @@ def generate(  # noqa: PLR0913
 ) -> torch.Tensor:
     """Generate text from the model given an initial context.
 
-    :param model: The GPT-like language model
+    :param model_instance: The LLM model instance
     :param idx: Input tensor containing token indices
     :param max_new_tokens: Maximum number of new tokens to generate
     :param context_size: Size of the context window to consider for generation
@@ -120,7 +120,7 @@ def generate(  # noqa: PLR0913
 
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]
-        logits = model(idx_cond)[:, -1, :]
+        logits = model_instance.model(idx_cond)[:, -1, :]
 
         if top_k is not None:
             top_logits, _ = torch.topk(logits, top_k)
