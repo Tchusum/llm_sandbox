@@ -49,7 +49,7 @@ ignore = [
     "D102",
     "D103",
     "D107",
-    "D401', 
+    "D401",
     "G004", # Logging statement uses f-string
     "RET504", # Unnecessary assignment to `logger` before `return` statement
     "PLC0415" # Import inside a function

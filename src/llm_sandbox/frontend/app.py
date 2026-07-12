@@ -3,8 +3,9 @@ import streamlit as st
 import tiktoken
 import torch
 
+from llm_sandbox.frontend.config import LLM_CONFIGS
 from llm_sandbox.frontend.llm_call import llm_call
-from llm_sandbox.llm.models import GPTConfig, GPTModel, load_model
+from llm_sandbox.llm.schemas import LLMModel
 from llm_sandbox.llm.utils import get_device
 
 
@@ -14,12 +15,10 @@ def get_device_st() -> torch.device:
 
 
 @st.cache_resource
-def get_tokenizer() -> tiktoken.Encoding:
-    return tiktoken.get_encoding("gpt2")
-
-@st.cache_resource
-def get_model_and_config(device: torch.device) -> tuple[GPTModel, GPTConfig]:
-    return load_model("gpt2-xl-alpaca-sft", device=device)
+def get_model(model: str, device: torch.device) -> LLMModel:
+    m = LLMModel.model_validate(LLM_CONFIGS[model]())
+    m.model.load(m.name, device=device)
+    return m
 
 
 def app() -> None:
@@ -30,8 +29,8 @@ def app() -> None:
         st.session_state.messages = []
 
     device = get_device_st()
-    tokenizer = get_tokenizer()
-    model, config = get_model_and_config(device)
+    model_name = st.selectbox("Select a model", list(LLM_CONFIGS.keys()))
+    model_instance = get_model(model_name, device)
 
     # Display chat messages from history on app rerun
     for message in st.session_state.messages:
@@ -44,8 +43,11 @@ def app() -> None:
             st.markdown(prompt)
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
-
-        response = llm_call(prompt, model, config, tokenizer, device)
+        response = llm_call(
+            prompt,
+            model_instance,
+            device,
+        )
 
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
@@ -56,4 +58,4 @@ def app() -> None:
 
 if __name__ == "__main__":
     app()
-# uv run --active streamlit run src/frontend/app.py
+# uv run --active streamlit run src/llm_sandbox/frontend/app.py

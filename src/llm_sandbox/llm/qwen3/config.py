@@ -5,7 +5,6 @@ import torch
 from pydantic import BaseModel
 from reasoning_from_scratch.qwen3 import Qwen3Tokenizer
 
-
 tokenizer_path = Path("data/qwen3/tokenizer-base.json")
 tokenizer = Qwen3Tokenizer(tokenizer_file_path=tokenizer_path)
 
