@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-from reasoning_from_scratch.qwen3 import QWEN_CONFIG_06_B, Qwen3Model, download_qwen3_small
+from reasoning_from_scratch.qwen3 import (
+    QWEN_CONFIG_06_B,
+    KVCache,
+    Qwen3Model,
+    download_qwen3_small,
+)
 
 from llm_sandbox.llm.gpt.config import MODEL_CONFIG
 from llm_sandbox.llm.gpt.model import GPTConfig, GPTModel
@@ -17,19 +22,21 @@ if TYPE_CHECKING:
 
 
 class LLMModel(ABC):
-
     @abstractmethod
     def load(self, model_name: str, device: torch.device) -> None:
         pass
 
+
 class LLMGPTModel(LLMModel):
-
-    def load(self, model_name: str, device: torch.device, base_key: str | None = None) -> None:
-
+    def load(
+        self, model_name: str, device: torch.device, base_key: str | None = None
+    ) -> None:
         model_path_input = Path("data/gpt2")
 
         # Resolve checkpoint filename
-        model_path = Path(__file__).parent.parent.parent.parent / model_path_input / model_name
+        model_path = (
+            Path(__file__).parent.parent.parent.parent / model_path_input / model_name
+        )
         if not model_path.exists():
             msg = "Model file not found."
             raise FileNotFoundError(msg)
@@ -66,12 +73,10 @@ class LLMGPTModel(LLMModel):
 
 
 class LLMQwen3Model(LLMModel):
-
     def __init__(self) -> None:
         self.config = QWENConfig06B(**QWEN_CONFIG_06_B)
 
     def load(self, model_name: str, device: torch.device) -> None:
-
         model_path_input = Path("data/qwen3")
 
         download_qwen3_small(kind="base", tokenizer_only=False, out_dir=model_path_input)
@@ -97,7 +102,6 @@ def generate(
     model_instance: LLMModel,
     idx: torch.Tensor,
     max_new_tokens: int,
-    context_size: int,
     temperature: float = 0.0,
     top_k: int | None = None,
     eos_id: int | None = None,
@@ -109,7 +113,6 @@ def generate(
     :param model_instance: The LLM model instance
     :param idx: Input tensor containing token indices
     :param max_new_tokens: Maximum number of new tokens to generate
-    :param context_size: Size of the context window to consider for generation
     :param temperature: Temperature for sampling (default: 0.0)
     :param top_k: If specified, only consider the top_k logits for sampling (default: None)
     :param eos_id: If specified, stop generation when this token ID is generated
@@ -117,11 +120,18 @@ def generate(
     """
     # remember original input length (to optionally exclude it from output)
     orig_len = idx.shape[1]
+    model_instance.model.eval()
+
+    is_qwen = isinstance(model_instance, LLMQwen3Model)
+    cache: KVCache | None = None
+    if is_qwen:
+        cache = KVCache(n_layers=model_instance.config.n_layers)
+        model_instance.model.reset_kv_cache()
+        logits = model_instance.model(idx, cache=cache)[:, -1, :]
+    else:
+        logits = model_instance.model(idx)[:, -1, :]
 
     for _ in range(max_new_tokens):
-        idx_cond = idx[:, -context_size:]
-        logits = model_instance.model(idx_cond)[:, -1, :]
-
         if top_k is not None:
             top_logits, _ = torch.topk(logits, top_k)
             min_val = top_logits[:, -1].unsqueeze(-1)  # shape (batch, 1)
@@ -151,6 +161,10 @@ def generate(
 
         # append sampled index to the running sequence
         idx = torch.cat((idx, idx_next), dim=1)  # (batch_size, num_tokens+1)
+        if is_qwen:
+            logits = model_instance.model(idx_next, cache=cache)[:, -1, :]
+        else:
+            logits = model_instance.model(idx)[:, -1, :]
 
     if exclude_input:
         return idx[:, orig_len:]
@@ -158,7 +172,7 @@ def generate(
 
 
 def generate_and_print(
-    model: GPTModel,
+    model_instance: LLMModel,
     tokenizer: tiktoken.Encoding,
     device: torch.device,
     start_context: str,
@@ -172,17 +186,15 @@ def generate_and_print(
     :param start_context: The initial context string for generating sample text.
     :param eos_id: Optional end-of-sequence token ID to stop generation early.
     """
-    model.eval()
-    context_size = model.pos_emb.weight.shape[0]
+    model_instance.model.eval()
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with torch.no_grad():
         token_ids = generate(
-            model=model,
+            model_instance=model_instance,
             idx=encoded,
             max_new_tokens=50,
-            context_size=context_size,
             eos_id=eos_id,
         )
     decoded_text = token_ids_to_text(token_ids, tokenizer)
     print(decoded_text.replace("\n", " "))  # Compact print format
-    model.train()
+    model_instance.model.train()

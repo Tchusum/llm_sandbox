@@ -25,7 +25,6 @@ def llm_call(
         model_instance=model_instance.model,
         idx=prompt_token,
         max_new_tokens=256,
-        context_size=model_instance.model.config.context_length,
         eos_id=model_instance.eos_id,
         exclude_input=True,
     )
