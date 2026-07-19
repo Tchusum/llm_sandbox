@@ -1,5 +1,5 @@
 import tiktoken
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from reasoning_from_scratch.qwen3 import Qwen3Tokenizer
 
 from llm_sandbox.llm.models import LLMGPTModel, LLMQwen3Model
